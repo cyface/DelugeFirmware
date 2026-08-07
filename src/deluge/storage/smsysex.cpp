@@ -844,6 +844,16 @@ void smSysex::handleNextSysEx() {
 		}
 		parser.exitTag();
 	}
+
+	// No recognized command tag was found, so the request was either unknown or
+	// malformed. Reply with an error rather than staying silent, so the client
+	// can tell a rejected request apart from one that was lost in transit.
+	startReply(jWriter, parser);
+	jWriter.writeOpeningTag("^error", false, true);
+	jWriter.writeAttribute("err", FRESULT::FR_INVALID_PARAMETER);
+	jWriter.closeTag(true);
+	sendMsg(de.cable, jWriter);
+
 done:
 	SysExQ.pop_front();
 }
