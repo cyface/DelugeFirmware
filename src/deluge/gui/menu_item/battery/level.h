@@ -78,7 +78,14 @@ private:
 
 		switch (power::state()) {
 		case power::State::OnBattery:
-			snprintf(buffer, kStringSize, "%d%% (%dmV)", (int)percent, batteryMV);
+			// Unknown for a few seconds after boot while the rail filter's high-seeded transient dies down,
+			// and briefly after unplugging if the unit booted on external power.
+			if (percent == power::kPercentUnknown) {
+				snprintf(buffer, kStringSize, "--%% (%dmV)", batteryMV);
+			}
+			else {
+				snprintf(buffer, kStringSize, "%d%% (%dmV)", (int)percent, batteryMV);
+			}
 			break;
 
 		case power::State::Charging:

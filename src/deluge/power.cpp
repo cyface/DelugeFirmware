@@ -85,7 +85,15 @@ constexpr std::size_t kHistorySeconds = 4;
 /// after the transition so the decaying ramp is not recorded as a charge level.
 constexpr uint32_t kSettleUpdates = 5 * kUpdatesPerSecond;
 
+/// inputRoutine() deliberately seeds its low-pass filter high (voltageReadingLastTime = 65535 * 3300, i.e.
+/// batteryMV starts near 6600mV) so the low-battery LED cannot blink spuriously at power-on, and the reading
+/// then decays toward the truth with the filter's ~1.6s time constant. Ignore updates until that artificial
+/// transient has died down (~4.5 time constants, residual under ~35mV), or booting on battery would always
+/// prime as Charging and take a fall-detect plus settle cycle to recover.
+constexpr uint32_t kBootSettleUpdates = 7 * kUpdatesPerSecond;
+
 State currentState = State::OnBattery;
+uint32_t updatesBeforePrime = 0;
 int32_t lastKnownPercent = kPercentUnknown;
 uint32_t updatesOnExternalPower = 0;
 uint32_t settleUpdates = 0;
@@ -119,6 +127,9 @@ int32_t percentFromMV(uint16_t mv) {
 
 void update(uint16_t mv) {
 	if (!primed) {
+		if (++updatesBeforePrime < kBootSettleUpdates) {
+			return;
+		}
 		primed = true;
 		for (uint16_t& sample : history) {
 			sample = mv;
