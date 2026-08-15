@@ -21,9 +21,9 @@
 ///
 /// This taps the power module's "Voltage Sense" line (SYS_VOLT_SENSE_PIN), which sits downstream of the
 /// charger's power path — so it is the *system rail*, not the cell. Running on battery the rail tracks the
-/// cell and this is a usable charge signal. On external power it reads the supply rail instead (measured
-/// ~4000mV charging a depleted cell, rising past 5000mV as the charge current tapers) and says nothing
-/// direct about the cell's state of charge. deluge::power below exists to keep those two cases apart.
+/// cell and this is a usable charge signal. On external power it reads the supply instead (~5000mV on USB)
+/// and says nothing whatsoever about the cell's state of charge, however long the charge has been running.
+/// deluge::power below exists to keep those two cases apart.
 extern uint16_t batteryMV;
 
 namespace deluge::power {
@@ -31,10 +31,8 @@ namespace deluge::power {
 enum class State : uint8_t {
 	/// Running from the cell. batteryMV tracks cell voltage, so the charge estimate is live.
 	OnBattery,
-	/// External power connected, charger still delivering appreciable current. The cell is not visible.
+	/// External power connected. The charger's power path hides the cell, so there is nothing live to measure.
 	Charging,
-	/// External power connected and the charge current has tapered off, so the cell is full.
-	Full,
 };
 
 /// No charge estimate available: the cell has not been visible since boot (i.e. we booted on external power).
@@ -52,7 +50,9 @@ bool onExternalPower();
 ///
 /// Live while OnBattery. While Charging this holds the last on-battery estimate, because the cell simply
 /// cannot be measured through the charger — it is real but stale, and minutesOnExternalPower() says how
-/// stale. Once the charger signals completion (State::Full) this reads 100 again.
+/// stale. There is no way to improve on that from this side: the rail sits at the supply voltage whether the
+/// cell is empty or full, so nothing here can detect charge completion. Unplug for a moment to get a live
+/// reading, or use the panel LED, which the charger IC drives directly and the MCU cannot see.
 int32_t percent();
 
 /// Whole minutes since external power was connected. Meaningless while OnBattery.

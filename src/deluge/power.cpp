@@ -66,27 +66,29 @@ constexpr uint16_t kCellMaxMV = 4200;
 constexpr uint16_t kExternalCertainMV = 4300;
 
 /// Rail step over kHistorySeconds that means a supply was plugged in or pulled out. Connecting power lifts the
-/// rail by hundreds of mV within a second or two; the cell itself cannot move anywhere near that fast, and load
-/// transients from the audio engine are worth well under 250mV, so this separates the two cleanly.
+/// rail by well over a volt; the cell itself cannot move anywhere near that fast, even collapsing at the end of
+/// its discharge (200mV per minute observed, i.e. ~13mV per window), and load transients from the audio engine
+/// are smaller still. Note the reading is heavily low-pass filtered upstream in inputRoutine() — about a 1.6s
+/// time constant — so the window has to be several times that for the step to have substantially arrived.
 constexpr uint16_t kStepMV = 250;
 constexpr std::size_t kHistorySeconds = 4;
 
-/// Rail voltage at which we call the charge complete.
-///
-/// The rail reads low while the charger is pulling hard (~4000mV observed into a depleted cell) and climbs as
-/// the current tapers, because less current means less drop across the supply and cable. So a high rail means
-/// the charger has essentially stopped. PROVISIONAL: the ceiling depends on the supply and cable in use, and
-/// this is calibrated against a USB source that settles slightly above 5000mV. The menu always shows raw mV
-/// alongside the estimate so this can be re-tuned against real hardware.
-constexpr uint16_t kChargeCompleteMV = 4900;
-constexpr uint16_t kChargeCompleteHysteresisMV = 100;
-/// Require the rail to stay up this long before believing the charge finished, so a transient cannot trip it.
-constexpr uint32_t kChargeCompleteHoldUpdates = 10 * kUpdatesPerSecond;
+// There is deliberately no charge-completion detection here. The rail sits at the supply voltage for as long as
+// power is connected, whatever the cell is doing — a rail of ~5000mV was observed alongside a cell that proved
+// to be nearly flat the moment it was unplugged. Any "full" verdict derived from this reading would therefore
+// fire seconds after plugging in, which is the very bug this module exists to fix. Charge state is genuinely
+// unobservable from the MCU: the panel LED that reports it is driven by the charger IC, and the power module
+// exposes only Battery LED (out) and Voltage Sense (in). Unplugging for a moment is the only way to measure.
+
+/// After a supply is pulled out the reading takes a few seconds to fall from the rail down to the cell, and
+/// everything in between is the filter in transit rather than a real measurement. Ignore readings for this long
+/// after the transition so the decaying ramp is not recorded as a charge level.
+constexpr uint32_t kSettleUpdates = 5 * kUpdatesPerSecond;
 
 State currentState = State::OnBattery;
 int32_t lastKnownPercent = kPercentUnknown;
 uint32_t updatesOnExternalPower = 0;
-uint32_t chargeCompleteHoldUpdates = 0;
+uint32_t settleUpdates = 0;
 
 uint16_t history[kHistorySeconds] = {};
 std::size_t historyIndex = 0;
@@ -132,34 +134,32 @@ void update(uint16_t mv) {
 
 	if (currentState == State::OnBattery) {
 		if (mv > kExternalCertainMV || rose) {
+			// The rail has already been climbing for a moment by the time the step is unambiguous, so the most
+			// recent readings are the supply arriving, not the cell. Roll the estimate back to before the step
+			// rather than freezing a value that has been dragged upward by the transition.
+			if (oldest <= kCellMaxMV) {
+				lastKnownPercent = percentFromMV(oldest);
+			}
 			currentState = State::Charging;
 			updatesOnExternalPower = 0;
-			chargeCompleteHoldUpdates = 0;
 		}
 	}
 	else if (fell && mv <= kCellMaxMV) {
 		currentState = State::OnBattery;
+		settleUpdates = kSettleUpdates;
 	}
 
 	if (currentState == State::OnBattery) {
-		lastKnownPercent = percentFromMV(mv);
+		if (settleUpdates > 0) {
+			settleUpdates--;
+		}
+		else {
+			lastKnownPercent = percentFromMV(mv);
+		}
 		updatesOnExternalPower = 0;
 	}
 	else {
 		updatesOnExternalPower++;
-
-		if (mv >= kChargeCompleteMV) {
-			if (chargeCompleteHoldUpdates < kChargeCompleteHoldUpdates) {
-				chargeCompleteHoldUpdates++;
-			}
-			else {
-				currentState = State::Full;
-			}
-		}
-		else if (mv < (kChargeCompleteMV - kChargeCompleteHysteresisMV)) {
-			chargeCompleteHoldUpdates = 0;
-			currentState = State::Charging;
-		}
 	}
 
 	if (++updatesSinceHistoryPush >= kUpdatesPerSecond) {
@@ -178,10 +178,6 @@ bool onExternalPower() {
 }
 
 int32_t percent() {
-	// A completed charge is the one thing external power does tell us about the cell.
-	if (currentState == State::Full) {
-		return 100;
-	}
 	return lastKnownPercent;
 }
 

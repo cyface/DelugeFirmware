@@ -82,9 +82,10 @@ private:
 			break;
 
 		case power::State::Charging:
-			// The charger's power path hides the cell, so there is no live percentage to show. Report the last
-			// reading taken on battery along with its age, rather than the rail voltage dressed up as a charge
-			// level — that is what used to make this menu read "100% FULL" from the moment you plugged in.
+			// The charger's power path hides the cell, so there is no live percentage to show, and no way to
+			// tell a full cell from an empty one until it is unplugged. Report the last reading taken on
+			// battery along with its age, rather than the rail voltage dressed up as a charge level — that is
+			// what used to make this menu read "100% FULL" from the moment you plugged in.
 			if (percent == power::kPercentUnknown) {
 				snprintf(buffer, kStringSize, "CHG (%dmV)", batteryMV);
 			}
@@ -92,10 +93,6 @@ private:
 				snprintf(buffer, kStringSize, "CHG %d%% %dm (%dmV)", (int)percent, (int)power::minutesOnExternalPower(),
 				         batteryMV);
 			}
-			break;
-
-		case power::State::Full:
-			snprintf(buffer, kStringSize, "FULL (%dmV)", batteryMV);
 			break;
 		}
 	}
