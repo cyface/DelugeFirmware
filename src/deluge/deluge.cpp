@@ -60,6 +60,7 @@
 #include "modulation/params/param_manager.h"
 #include "playback/mode/arrangement.h"
 #include "playback/mode/session.h"
+#include "power.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/cv_engine.h"
 #include "scheduler_api.h"
@@ -167,6 +168,9 @@ void inputRoutine() {
 		batteryMV = (voltageReadingLastTime) >> 15;
 		// D_PRINT("batt mV: ");
 		// D_PRINTLN(batteryMV);
+
+		// Track whether that reading is the cell or an external supply, and estimate charge from it.
+		deluge::power::update(batteryMV);
 
 		// See if we've reached threshold to change verdict on battery level
 

@@ -1410,8 +1410,6 @@ void SoundEditor::enterOrUpdateSoundEditor(bool on) {
 	}
 }
 
-extern uint16_t batteryMV;
-
 ActionResult SoundEditor::padAction(int32_t x, int32_t y, int32_t on) {
 	if (sdRoutineLock) {
 		return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE;

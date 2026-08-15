@@ -21,9 +21,9 @@
 #include "hid/display/oled.h"
 #include "hid/display/seven_segment.h"
 #include "model/settings/runtime_feature_settings.h"
+#include "power.h"
+#include <cstddef>
 #include <cstdio>
-// External battery voltage variable from deluge.cpp
-extern uint16_t batteryMV;
 
 namespace deluge::gui::menu_item::battery {
 class Level final : public MenuItem {
@@ -35,81 +35,73 @@ public:
 	}
 	void drawPixelsForOled() override {
 		deluge::hid::display::oled_canvas::Canvas& canvas = hid::display::OLED::main;
-		char buffer[50];
+		char buffer[kStringSize];
 		getBatteryString(buffer);
 		canvas.drawStringCentredShrinkIfNecessary(buffer, 22, 18, 20);
 	}
 
 	void beginSession(MenuItem* navigatedBackwardFrom) override {
-		// Store initial voltage to detect charging
-		lastBatteryMV = batteryMV;
-		voltageCheckCounter = 0;
-
 		drawValue();
 		// Start the timer for updates
 		uiTimerManager.setTimer(TimerName::UI_SPECIFIC, 500);
 	}
 
 	void drawValue() {
-		char buffer[50];
+		char buffer[kStringSize];
 		getBatteryString(buffer);
 		display->setScrollingText(buffer);
 	}
 
 	ActionResult timerCallback() override {
-		// Check if voltage is rising (charging detection)
-		voltageCheckCounter++;
-		if (voltageCheckCounter >= 4) { // Check every 2 seconds
-			int32_t voltageDiff = batteryMV - lastBatteryMV;
-			// Consider it charging if voltage rose by more than 5mV in 2 seconds
-			// This threshold may need tuning based on real hardware behavior
-			isCharging = (voltageDiff > 5);
-			lastBatteryMV = batteryMV;
-			voltageCheckCounter = 0;
-		}
-
 		drawValue();
 		uiTimerManager.setTimer(TimerName::UI_SPECIFIC, 500);
 		return ActionResult::DEALT_WITH;
 	}
 
 private:
-	uint16_t lastBatteryMV = 0;
-	uint8_t voltageCheckCounter = 0;
-	bool isCharging = false;
+	/// Enough for the longest form, "CHG 100% 999m (5008mV)".
+	static constexpr std::size_t kStringSize = 32;
 
 	/**
 	 * Formats battery information into a string buffer.
 	 *
-	 * @param buffer Output buffer for the formatted string. Must be at least 20 characters
-	 *               to safely hold the maximum possible output: "100% (4200mV) FULL"
+	 * Charge state is tracked continuously by deluge::power rather than worked out here, so the reading is
+	 * already correct the moment this menu opens rather than needing seconds of observation first.
+	 *
+	 * Raw mV is always shown: on battery it is the cell, on external power it is the supply rail, and in both
+	 * cases it is the only number here that is a direct measurement.
+	 *
+	 * @param buffer Output buffer for the formatted string, of at least kStringSize characters.
 	 */
 	void getBatteryString(char* buffer) {
-		// Calculate battery percentage
-		// Assuming battery range is 2600mV (0%) to 4200mV (100%)
-		const uint16_t minVoltage = 2600;
-		const uint16_t maxVoltage = 4200;
+		const int32_t percent = power::percent();
 
-		int32_t percentage = 0;
-		if (batteryMV > minVoltage) {
-			percentage = ((int32_t)(batteryMV - minVoltage) * 100) / (maxVoltage - minVoltage);
-			if (percentage > 100)
-				percentage = 100;
-			if (percentage < 0)
-				percentage = 0;
-		}
+		switch (power::state()) {
+		case power::State::OnBattery:
+			// Unknown for a few seconds after boot while the rail filter's high-seeded transient dies down,
+			// and briefly after unplugging if the unit booted on external power.
+			if (percent == power::kPercentUnknown) {
+				snprintf(buffer, kStringSize, "--%% (%dmV)", batteryMV);
+			}
+			else {
+				snprintf(buffer, kStringSize, "%d%% (%dmV)", (int)percent, batteryMV);
+			}
+			break;
 
-		// Determine status
-		const char* status = "";
-		if (percentage >= 99) {
-			status = " FULL";
+		case power::State::Charging:
+			// The charger's power path hides the cell, so there is no live percentage to show, and no way to
+			// tell a full cell from an empty one until it is unplugged. Report the last reading taken on
+			// battery along with its age, rather than the rail voltage dressed up as a charge level — that is
+			// what used to make this menu read "100% FULL" from the moment you plugged in.
+			if (percent == power::kPercentUnknown) {
+				snprintf(buffer, kStringSize, "CHG (%dmV)", batteryMV);
+			}
+			else {
+				snprintf(buffer, kStringSize, "CHG %d%% %dm (%dmV)", (int)percent, (int)power::minutesOnExternalPower(),
+				         batteryMV);
+			}
+			break;
 		}
-		else if (isCharging) {
-			status = " CHG"; // Charging indicator
-		}
-
-		// Format the string with percentage, voltage, and status
-		sprintf(buffer, "%d%% (%dmV)%s", percentage, batteryMV, status);
 	}
 };
 } // namespace deluge::gui::menu_item::battery
