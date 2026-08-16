@@ -559,7 +559,18 @@ public:
 	bool contains(char const* nameWithExtension) const override {
 		bool foundExact = false;
 		Browser::fileItems.search(nameWithExtension, &foundExact);
-		return foundExact;
+		if (foundExact) {
+			return true;
+		}
+		// fileItems is only a RAM-capped window of the folder (see cullSomeFileItems()), so a name that is
+		// absent from it can still exist on the card - and handing that name out as "free" makes the next
+		// save silently overwrite the file. Only the card can prove a name free.
+		String filePath;
+		filePath.set(&Browser::currentDir);
+		if (filePath.concatenate("/") != Error::NONE || filePath.concatenate(nameWithExtension) != Error::NONE) {
+			return true; // Can't verify, so treat the name as taken rather than risk an overwrite.
+		}
+		return StorageManager::fileExists(filePath.get());
 	}
 };
 } // namespace
