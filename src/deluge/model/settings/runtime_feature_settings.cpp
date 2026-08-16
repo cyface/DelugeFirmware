@@ -204,6 +204,11 @@ void RuntimeFeatureSettings::init() {
 	// Rounded Corners
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::RoundedCorners], STRING_FOR_COMMUNITY_FEATURE_ROUNDED_CORNERS,
 	                  "roundedCorners", RuntimeFeatureStateToggle::On);
+
+	// Reload presets overwritten via the sysex file protocol
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SysexPresetReload],
+	                  STRING_FOR_COMMUNITY_FEATURE_SYSEX_PRESET_RELOAD, "sysexPresetReload",
+	                  RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

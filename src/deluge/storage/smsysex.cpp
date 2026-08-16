@@ -20,6 +20,7 @@
 #include "model/clip/clip.h"
 #include "model/instrument/instrument.h"
 #include "model/model_stack.h"
+#include "model/settings/runtime_feature_settings.h"
 #include "model/song/song.h"
 #include "processing/engines/audio_engine.h"
 #include "scheduler_api.h"
@@ -290,6 +291,9 @@ retry:
 // discard the cached copy and reload it from the file, so edits saved from an external editor are
 // heard immediately without cloning the preset or rebooting.
 static void reloadPresetFromFile(const char* path) {
+	if (!runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::SysexPresetReload)) {
+		return;
+	}
 	if (currentSong == nullptr) {
 		return;
 	}
