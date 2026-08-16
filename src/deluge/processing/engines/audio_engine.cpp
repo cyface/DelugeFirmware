@@ -50,6 +50,7 @@
 #include "processing/engines/cv_engine.h"
 #include "processing/live/live_input_buffer.h"
 #include "processing/metronome/metronome.h"
+#include "processing/nam/nam_spike.h"
 #include "processing/sound/sound.h"
 #include "processing/sound/sound_drum.h"
 #include "processing/sound/sound_instrument.h"
@@ -941,6 +942,10 @@ void renderSongFX(size_t numSamples) { // LPF and stutter for song (must happen 
 		masterVolumeAdjustmentL = ONE_Q31;
 		masterVolumeAdjustmentR = ONE_Q31;
 		logAction("mastercomp end");
+
+		// NAM spike: neural amp modeling over the whole mix (no-op unless the community
+		// feature is enabled and the model loaded)
+		deluge::nam_spike::processMasterOutput(renderingBuffer);
 	}
 }
 void setMonitoringMode() { // Monitoring setup

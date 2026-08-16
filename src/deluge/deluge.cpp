@@ -62,6 +62,7 @@
 #include "playback/mode/session.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/cv_engine.h"
+#include "processing/nam/nam_spike.h"
 #include "scheduler_api.h"
 #include "storage/audio/audio_file_manager.h"
 #include "storage/flash_storage.h"
@@ -837,6 +838,10 @@ extern "C" int32_t deluge_main(void) {
 	PadLEDs::setBrightnessLevel(FlashStorage::defaultPadBrightness);
 	setupBlankSong(); // we always need to do this
 	addConditionalTask(setupStartupSong, 100, isCardReady, "load startup song", RESOURCE_SD | RESOURCE_SD_ROUTINE);
+
+	// NAM spike (Phase 0): load the baked amp model + schedule the inference benchmark.
+	// No-op unless the "NAM Amp Sim (Dev)" community feature is on.
+	deluge::nam_spike::init();
 
 #ifdef TEST_VECTOR
 	NoteVector noteVector;

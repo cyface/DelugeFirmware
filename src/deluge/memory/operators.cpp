@@ -1,12 +1,19 @@
 #include "memory/general_memory_allocator.h"
+#include "memory/memory_placement.h"
 #include "util/exceptions.h"
 #include <new>
+
+namespace deluge::memory {
+bool preferInternalNextAllocs = false;
+} // namespace deluge::memory
 
 // todo - make this work in unit tests, need to remove hard coded addresses in GMA
 #if !IN_UNIT_TESTS
 void* operator new(std::size_t n) noexcept(false) {
-	// allocate on external RAM
-	void* addr = GeneralMemoryAllocator::get().allocExternal(n);
+	// allocate on external RAM (or internal first, when the placement experiment switch is on -
+	// allocMaxSpeed falls back to external itself if internal is full)
+	void* addr = deluge::memory::preferInternalNextAllocs ? GeneralMemoryAllocator::get().allocMaxSpeed(n)
+	                                                      : GeneralMemoryAllocator::get().allocExternal(n);
 	if (addr == nullptr) [[unlikely]] {
 		// The throwing operator new must never return null: std::string / std::vector and friends assume a non-null
 		// buffer, so returning null silently corrupts them. Throw the same lightweight exception the custom STL

@@ -204,6 +204,10 @@ void RuntimeFeatureSettings::init() {
 	// Rounded Corners
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::RoundedCorners], STRING_FOR_COMMUNITY_FEATURE_ROUNDED_CORNERS,
 	                  "roundedCorners", RuntimeFeatureStateToggle::On);
+
+	// NAM spike (dev): neural amp modeling on the master output + boot benchmark
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::NamSpike], STRING_FOR_COMMUNITY_FEATURE_NAM_SPIKE, "namSpike",
+	                  RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {
