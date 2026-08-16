@@ -5,6 +5,10 @@ inference engine on the Deluge — as a guitar amp sim on the line input, and as
 the master mix. All firmware `file:line` references are against this repo; estimates are
 flagged as such throughout.*
 
+> **Update — Phase 0 measured.** The benchmark below has since been implemented and run on
+> real hardware; see [Phase 0 results](#phase-0-results-measured-on-hardware) at the end.
+> Headline: A2-Lite runs in real time at **86% CPU** with model state in internal RAM.
+
 ## Verdict
 
 **Feasible, with the CPU as the whole story.** Memory, toolchain, licensing, and integration
@@ -178,6 +182,51 @@ optimization to reach real-time A2-Lite. The Deluge has a faster core architectu
 share it with everything else. A1-Nano as a line-in amp is the bet to make; A2-Lite is worth
 measuring before dismissing; whole-mix processing will always be a "light songs only" feature
 on this hardware.
+
+## Phase 0 results (measured on hardware)
+
+*Added August 16, 2026, after implementing and running the Phase 0 benchmark on a real
+Deluge. The spike lives on branch `claude/nam-feasibility-spike`: NeuralAmpModelerCore +
+Eigen vendored via FetchContent, a baked-in A2-Lite capture processing the master output
+(mono-summed, post-master-compressor), and a boot-time benchmark writing `NAM_BENCH.TXT`
+to the SD root — all behind the "NAM Amp Sim (Dev)" community feature toggle.*
+
+Measured inference cost (44.1 kHz, 64-sample blocks, ~9,070 cycles/sample total budget):
+
+| Case | cycles/sample | CPU share | Verdict |
+|---|---|---|---|
+| A2-Lite, state in internal RAM | 7,887 | **86%** | Real-time — barely |
+| A2-Lite, state in external SDRAM | 12,224 | 134% | Not real-time |
+| A1-Nano, generic path, internal RAM | 13,079 | 144% | Not real-time |
+
+What this settles:
+
+1. **NAM runs in real time on the Deluge** — but A2-Lite consumes 86% of the whole CPU,
+   so this is a *dedicated amp/saturation mode*, not a mix insert running alongside full
+   songs. The original estimate range (33–55%) was optimistic: GCC does not meaningfully
+   vectorize the A2 fast path's plain-loop baseline on the A9's FMA-less NEON.
+2. **Internal RAM placement is mandatory.** SDRAM costs +55% (L2 data cache is locked
+   off; 16-bit @ 66 MHz bus) and breaks real-time. The prefer-internal-RAM switch added
+   to global `operator new` for this experiment earned its keep.
+3. **The A2 fast path is the only viable route.** A1-Nano through the generic Eigen path
+   costs *more* than the 2.6×-bigger A2-Lite — small-matrix Eigen GEMM overhead dominates
+   on this core. There is no point pursuing A1 architectures.
+4. **Sound quality was inconclusive by design** (listening verdict: "pretty bad") — the
+   baked capture was an arbitrary amp model from NAM's example files, fed a mono-summed
+   full mix with guessed gain staging. The tone test needs a low-gain saturation capture
+   chosen on purpose, plus an input-trim control, before it means anything.
+
+Remaining headroom if 86% needs to shrink: hand-NEON the 3-channel A2 layer kernels (the
+shipped `a2_fast` baseline is deliberately unoptimized plain loops — the RP2350 port got
+3.7× from kernel work on a weaker core), LUT activations, and removing the benchmark's
+L1 contention with the concurrently-running live model. A production integration should
+also excise NAM's `<iostream>` dependency, which contributed much of the +575 KB
+.text/.rodata cost (internal heap went from ~1.13 MB to ~563 KB free).
+
+**Status: parked.** The spike was backed out of `local-fixes` after the listening test;
+re-merge this branch to pick it up again. Next step when revisiting: bake a deliberately
+chosen low-gain saturation capture (TONE3000, A2-packed so it contains the Lite submodel)
+via `scripts/nam/gen_baked_models.py`, and add an input trim.
 
 ## Sources
 
