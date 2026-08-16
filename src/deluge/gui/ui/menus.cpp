@@ -633,6 +633,8 @@ PLACE_SDRAM_BSS fx::Clipping clippingMenu{STRING_FOR_SATURATION};
 PLACE_SDRAM_BSS UnpatchedParam srrMenu{STRING_FOR_DECIMATION, params::UNPATCHED_SAMPLE_RATE_REDUCTION,
                                        RenderingStyle::BAR};
 PLACE_SDRAM_BSS UnpatchedParam bitcrushMenu{STRING_FOR_BITCRUSH, params::UNPATCHED_BITCRUSHING, RenderingStyle::BAR};
+PLACE_SDRAM_BSS UnpatchedParam tapeSaturationMenu{STRING_FOR_TAPE, params::UNPATCHED_TAPE_SATURATION,
+                                                  RenderingStyle::BAR};
 PLACE_SDRAM_BSS patched_param::Integer foldMenu{STRING_FOR_WAVEFOLD, STRING_FOR_WAVEFOLD, params::LOCAL_FOLD,
                                                 RenderingStyle::BAR};
 
@@ -643,6 +645,7 @@ PLACE_SDRAM_BSS HorizontalMenu soundDistortionMenu{
         &bitcrushMenu,
         &srrMenu,
         &foldMenu,
+        &tapeSaturationMenu,
     },
 };
 
@@ -839,6 +842,7 @@ PLACE_SDRAM_BSS HorizontalMenu globalDistortionMenu{
     {
         &srrMenu,
         &bitcrushMenu,
+        &tapeSaturationMenu,
     },
 };
 
@@ -911,6 +915,7 @@ PLACE_SDRAM_BSS HorizontalMenu audioClipDistortionMenu{
         &clippingMenu,
         &bitcrushMenu,
         &srrMenu,
+        &tapeSaturationMenu,
     },
 };
 

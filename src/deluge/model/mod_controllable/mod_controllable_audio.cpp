@@ -65,6 +65,9 @@ ModControllableAudio::ModControllableAudio() {
 	// Sample rate reduction
 	sampleRateReductionOnLastTime = false;
 
+	// Tape saturation
+	tapeSaturationOnLastTime = false;
+
 	// Saturation
 	clippingAmount = 0;
 
@@ -134,6 +137,8 @@ void ModControllableAudio::initParams(ParamManager* paramManager) {
 	unpatchedParams->params[params::UNPATCHED_SAMPLE_RATE_REDUCTION].setCurrentValueBasicForSetup(-2147483648);
 
 	unpatchedParams->params[params::UNPATCHED_BITCRUSHING].setCurrentValueBasicForSetup(-2147483648);
+
+	unpatchedParams->params[params::UNPATCHED_TAPE_SATURATION].setCurrentValueBasicForSetup(-2147483648);
 
 	unpatchedParams->params[params::UNPATCHED_SIDECHAIN_SHAPE].setCurrentValueBasicForSetup(-601295438);
 	unpatchedParams->params[params::UNPATCHED_COMPRESSOR_THRESHOLD].setCurrentValueBasicForSetup(0);
@@ -368,6 +373,72 @@ void ModControllableAudio::processSRRAndBitcrushing(std::span<StereoSample> buff
 	else {
 		sampleRateReductionOnLastTime = false;
 	}
+
+	// Tape saturation goes after SRR / bitcrushing so it rounds off their edges too
+	processTapeSaturation(buffer, paramManager);
+}
+
+bool ModControllableAudio::isTapeSaturationEnabled(ParamManager* paramManager) {
+	UnpatchedParamSet* unpatchedParams = paramManager->getUnpatchedParamSet();
+	return (unpatchedParams->getValue(params::UNPATCHED_TAPE_SATURATION) != -2147483648);
+}
+
+// Tape-style saturation: pre-emphasis (1 - 0.5z^-1) into a slightly biased antialiased tanh, then the exact inverse
+// de-emphasis and a DC blocker. HF gets compressed harder than lows, so drive softens the top end and adds mostly
+// 2nd/3rd harmonic. Small-signal gain stays at unity; drive only lowers the ceiling the peaks get squashed into
+// (6dB per eighth of the knob).
+void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer, ParamManager* paramManager) {
+	if (!isTapeSaturationEnabled(paramManager)) {
+		tapeSaturationOnLastTime = false;
+		return;
+	}
+
+	if (!tapeSaturationOnLastTime) {
+		tapeSaturationOnLastTime = true;
+		tapeSatPreEmphLast.l = tapeSatPreEmphLast.r = 0;
+		tapeSatDeEmphLast.l = tapeSatDeEmphLast.r = 0;
+		tapeSatDCBlock.l = tapeSatDCBlock.r = 0;
+		tapeSatTanHWorkingValue[0] = tapeSatTanHWorkingValue[1] = 2147483648u;
+	}
+
+	uint32_t positive =
+	    (uint32_t)paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION) + 2147483648u;
+
+	// Drive is fineGain * 2^driveShift, continuous across the whole knob. The +2 in saturationAmount undoes the /4
+	// inherent in the q30 fine-gain multiply.
+	uint32_t saturationAmount = (positive >> 29) + 2;
+	int32_t fineGain = (int32_t)((1u << 30) + ((positive & 0x1FFFFFFF) << 1)); // q30, [1.0, 2.0)
+
+	// Post-shape makeup for unity small-signal gain: 8 / (tableSlope * fineGain), as q28 with a <<4 after the
+	// multiply. 1154084861100017408 = (8 / 1.998) * 2^58, with 1.998 the measured centre slope of tanH2d.
+	int32_t makeupGain = (int32_t)(1154084861100017408uLL / (uint32_t)fineGain);
+
+	// A little input bias makes the shaper asymmetric for 2nd-harmonic warmth; the static output offset is
+	// subtracted straight back out and the DC blocker catches the signal-dependent remainder.
+	int32_t biasInput = (int32_t)(positive >> 5) >> saturationAmount;
+	int32_t outOffset = getTanHUnknown(biasInput, saturationAmount);
+
+	for (StereoSample& sample : buffer) {
+		int32_t* channels[2] = {&sample.l, &sample.r};
+		int32_t* preEmphLast[2] = {&tapeSatPreEmphLast.l, &tapeSatPreEmphLast.r};
+		int32_t* deEmphLast[2] = {&tapeSatDeEmphLast.l, &tapeSatDeEmphLast.r};
+		int32_t* dcBlock[2] = {&tapeSatDCBlock.l, &tapeSatDCBlock.r};
+
+		for (int32_t ch = 0; ch < 2; ch++) {
+			int32_t x = *channels[ch];
+			int32_t pre = (x >> 1) - (*preEmphLast[ch] >> 2); // halved for headroom; de-emphasis restores it
+			*preEmphLast[ch] = x;
+			int32_t driven = multiply_32x32_rshift32(pre, fineGain);
+			int32_t shaped =
+			    getTanHAntialiased(driven + biasInput, &tapeSatTanHWorkingValue[ch], saturationAmount) - outOffset;
+			shaped = multiply_32x32_rshift32(shaped, makeupGain) << 4;
+			int32_t de = shaped + (*deEmphLast[ch] >> 1);
+			*deEmphLast[ch] = de;
+			int32_t y = de << 1;
+			*dcBlock[ch] += (y - *dcBlock[ch]) >> 8;
+			*channels[ch] = y - *dcBlock[ch];
+		}
+	}
 }
 
 inline void ModControllableAudio::doEQ(bool doBass, bool doTreble, int32_t* inputL, int32_t* inputR, int32_t bassAmount,
@@ -501,6 +572,8 @@ void ModControllableAudio::writeParamAttributesToFile(Serializer& writer, ParamM
 	unpatchedParams->writeParamAsAttribute(writer, "modFXFeedback", params::UNPATCHED_MOD_FX_FEEDBACK, writeAutomation,
 	                                       false, valuesForOverride);
 	// Community Firmware parameters (always write them after the official ones, just before closing the parent tag)
+	unpatchedParams->writeParamAsAttribute(writer, "tapeSaturation", params::UNPATCHED_TAPE_SATURATION, writeAutomation,
+	                                       false, valuesForOverride);
 	unpatchedParams->writeParamAsAttribute(writer, "compressorThreshold", params::UNPATCHED_COMPRESSOR_THRESHOLD,
 	                                       writeAutomation, false, valuesForOverride);
 
@@ -597,6 +670,12 @@ bool ModControllableAudio::readParamTagFromFile(Deserializer& reader, char const
 		unpatchedParams->readParam(reader, unpatchedParamsSummary, params::UNPATCHED_BITCRUSHING,
 		                           readAutomationUpToPos);
 		reader.exitTag("bitCrush");
+	}
+
+	else if (!strcmp(tagName, "tapeSaturation")) {
+		unpatchedParams->readParam(reader, unpatchedParamsSummary, params::UNPATCHED_TAPE_SATURATION,
+		                           readAutomationUpToPos);
+		reader.exitTag("tapeSaturation");
 	}
 
 	else if (!strcmp(tagName, "modFXOffset")) {
