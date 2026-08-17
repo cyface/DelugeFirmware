@@ -60,24 +60,31 @@ words per channel; it is reset whenever the effect transitions from off to on.
 
 ### Knob taper and gain staging
 
-The knob has two regimes that meet continuously at the crossover (`saturationAmount` 12,
-75% of travel):
+The three insertion points run at very different internal levels — measured during real song
+playback: a lone Sound peaks around 2^20–21, kit/audio-clip summing around 2^22–23, and the song
+master around 2^23–25.5. One shared calibration can never fit all three (this is why the stock
+Saturation also uses different shift bases per context), so each context anchors the knob via
+`getTapeSaturationDriveBase()`: **Sound 9, GlobalEffectableForClip 8, song master 4**.
+
+On top of that base, the knob has two regimes that meet continuously at the crossover
+(`base + 6`, 75% of travel):
 
 - **Below**: small-signal gain is exactly unity (a q28 makeup multiplier cancels both the table's
   centre slope and the fine gain), and each drive step lowers the ceiling that peaks squash into
-  by 6dB (from ~2^27.4 down to ~2^21.4 in internal units). Character changes; level doesn't.
-- **Above**: the ceiling holds at ~2^21.4 and small-signal gain instead rises 6dB per step
-  (`g = 2^(sat−12) · fineGain`, exactly 1.0 at the boundary — no level pop while sweeping).
+  by 6dB. Character changes; level doesn't.
+- **Above**: the ceiling holds and small-signal gain instead rises 6dB per step
+  (`g = 2^(sat−crossover) · fineGain`, exactly 1.0 at the boundary — no level pop while sweeping).
   This exists because a pure unity-gain/falling-ceiling design is level-dependent: internal
   levels differ hugely between a full synth patch (~2^22 peaks) and a lone cowbell sample, and
   without the rising regime quiet sources never reached the shaper at all.
 
-The absolute anchoring came from hardware iteration: Deluge internal levels at the post-FX
-insertion point sit far below q31 full scale (the stock Saturation applies input shifts of up to
-2^20 before its tanh for the same reason). The first calibration, derived from a synthetic test
-loop, was ~24dB too cold and inaudible on hardware despite measuring beautifully; an over-corrected
-+12dB pass was then "much too crunchy" from 10% of the knob. The final anchoring splits the
-difference and moves the extra reach for quiet sources into the rising-drive regime alone.
+The anchoring history is instructive: the first calibration, derived from a synthetic test loop,
+assumed q31-nominal levels and was inaudible on hardware; an over-corrected pass was "much too
+crunchy" from 10% of the knob — but only in song mode, while clips stayed silent. The eventual
+diagnosis (measured live in the DelugEmu emulator via QMP guest-memory inspection, then confirmed
+by rendering emulator audio to WAV and comparing crest factor and harmonics) was that both paths
+worked correctly and the ~15dB level gap between contexts made any single anchoring wrong
+somewhere. Hence the per-context bases.
 
 ### Fixed-point details worth knowing
 
@@ -99,14 +106,17 @@ small-signal gain (must be continuous — no pops under automation), squash ceil
 spectrum (H2–H5 of a 441Hz sine at device-realistic levels), output polarity, and residual DC.
 It also renders audition WAVs of a synth loop at several drive settings. Final measured taper:
 
-| Knob | Small-signal gain | Ceiling (internal units) |
-|---|---|---|
-| 12.5% | −0.05dB | 2^26.4 |
-| 37.5% | −0.10dB | 2^24.4 |
-| 62.5% | −0.26dB | 2^22.4 |
-| 75% | −0.37dB (crossover) | 2^21.4 |
-| 87.5% | +5.5dB | 2^21.4 |
-| 100% | +11.0dB | 2^21.4 |
+| Knob | Small-signal gain | Ceiling (Sound, base 9) | Ceiling (song master, base 4) |
+|---|---|---|---|
+| 12.5% | −0.05dB | 2^23.4 | 2^28.2 |
+| 37.5% | −0.15dB | 2^21.4 | 2^26.4 |
+| 62.5% | −0.7dB | 2^19.4 | 2^24.4 |
+| 75% | crossover | 2^18.4 | 2^23.4 |
+| 100% | rising (up to ~+12dB) | 2^18.4 | 2^23.4 |
+
+End-to-end check on a real song in the emulator: master Tape at 30/50 tamed a mix that was
+touching digital full scale by ~6dB of soft peak limiting at roughly constant loudness (crest
+factor 6 → 4), with no audible artifacts — the intended "bus glue" behaviour.
 
 ## Integration points (checklist for similar params)
 
@@ -116,6 +126,8 @@ name + `paramNameForFile` → `"tapeSaturation"`), `strings.h` + `english.json` 
 `seven_segment.json` (the `g_*.cpp` files are build-generated), `mod_controllable_audio.*`
 (default value in `initParams`, state, DSP, read/write param tags), `menus.cpp` (menu item + the
 three Distortion horizontal menus), and `automation_view.cpp` (both param lists and their counts).
+Context-specific behaviour hangs off the `getTapeSaturationDriveBase()` virtual, overridden in
+`sound.h` and `global_effectable_for_clip.h`.
 Not mapped: MIDI follow CCs and the performance view default layout (no free slots by convention).
 
 ## Possible future work
