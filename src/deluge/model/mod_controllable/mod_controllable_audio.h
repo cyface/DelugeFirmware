@@ -59,6 +59,7 @@ public:
 	virtual Error readTagFromFile(Deserializer& reader, char const* tagName, ParamManagerForTimeline* paramManager,
 	                              int32_t readAutomationUpToPos, ArpeggiatorSettings* arpSettings, Song* song);
 	void processSRRAndBitcrushing(std::span<StereoSample> buffer, int32_t* postFXVolume, ParamManager* paramManager);
+	void processTapeSaturation(std::span<StereoSample> buffer, ParamManager* paramManager);
 	static void writeParamAttributesToFile(Serializer& writer, ParamManager* paramManager, bool writeAutomation,
 	                                       int32_t* valuesForOverride = nullptr);
 	static void writeParamTagsToFile(Serializer& writer, ParamManager* paramManager, bool writeAutomation,
@@ -86,6 +87,13 @@ public:
 	virtual void ensureInaccessibleParamPresetValuesWithoutKnobsAreZero(Song* song) {} // Song may be NULL
 	bool isBitcrushingEnabled(ParamManager* paramManager);
 	bool isSRREnabled(ParamManager* paramManager);
+	bool isTapeSaturationEnabled(ParamManager* paramManager);
+
+	/// Base drive shift for tape saturation. The three insertion points run ~15dB apart (a lone Sound is much
+	/// quieter than the summed song master), so each context anchors the knob differently - same idea as the
+	/// stock Saturation's per-context shift bases. Default suits the song master; Sound and
+	/// GlobalEffectableForClip override hotter.
+	virtual uint32_t getTapeSaturationDriveBase() { return 4; }
 	bool hasBassAdjusted(ParamManager* paramManager);
 	bool hasTrebleAdjusted(ParamManager* paramManager);
 	ModelStackWithAutoParam* getParamFromMIDIKnob(MIDIKnob& knob, ModelStackWithThreeMainThings* modelStack) override;
@@ -120,6 +128,13 @@ public:
 	StereoSample lastSample;
 	StereoSample grabbedSample;
 	StereoSample lastGrabbedSample;
+
+	// Tape saturation
+	bool tapeSaturationOnLastTime;
+	StereoSample tapeSatPreEmphLast;
+	StereoSample tapeSatDeEmphLast;
+	StereoSample tapeSatDCBlock;
+	uint32_t tapeSatTanHWorkingValue[2];
 
 	SideChain sidechain; // Song doesn't use this, despite extending this class
 
