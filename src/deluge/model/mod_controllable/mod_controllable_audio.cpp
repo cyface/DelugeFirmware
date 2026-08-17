@@ -404,22 +404,22 @@ void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer,
 	uint32_t positive =
 	    (uint32_t)paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION) + 2147483648u;
 
-	// Drive is fineGain * 2^driveShift, continuous across the whole knob. Of the +8 in saturationAmount, 2 undoes
-	// the /4 inherent in the q30 fine-gain multiply and 6 anchors the knob to real internal levels (which sit well
+	// Drive is fineGain * 2^driveShift, continuous across the whole knob. Of the +6 in saturationAmount, 2 undoes
+	// the /4 inherent in the q30 fine-gain multiply and 4 anchors the knob to real internal levels (which sit well
 	// below q31 full scale - the stock Saturation effect needs similar boosts before it bites).
-	uint32_t saturationAmount = (positive >> 29) + 8;
+	uint32_t saturationAmount = (positive >> 29) + 6;
 	int32_t fineGain = (int32_t)((1u << 30) + ((positive & 0x1FFFFFFF) << 1)); // q30, [1.0, 2.0)
 
 	// Post-shape makeup. 1154084861100017408 = (8 / 1.998) * 2^58, with 1.998 the measured centre slope of tanH2d.
-	// Below the crossover, gain is 8 / (tableSlope * fineGain) - unity small-signal gain, with drive lowering the
-	// ceiling peaks squash into. Above it the ceiling holds and small-signal gain rises 6dB per step instead
-	// (g = 2^(sat-13) * fineGain, exactly 1.0 at the boundary, so the knob sweep stays continuous): quiet sources
-	// get pushed up into the shaper rather than the ceiling dropping below their reach.
+	// Below the crossover (75% of the knob), gain is 8 / (tableSlope * fineGain) - unity small-signal gain, with
+	// drive lowering the ceiling peaks squash into. Above it the ceiling holds and small-signal gain rises 6dB per
+	// step instead (g = 2^(sat-12) * fineGain, exactly 1.0 at the boundary, so the knob sweep stays continuous):
+	// quiet sources get pushed up into the shaper rather than the ceiling dropping below their reach.
 	int32_t makeupGain;
 	int32_t makeupShift;
-	if (saturationAmount >= 13) {
+	if (saturationAmount >= 12) {
 		makeupGain = (int32_t)(1154084861100017408uLL >> 30);
-		makeupShift = 4 + (int32_t)(saturationAmount - 13);
+		makeupShift = 4 + (int32_t)(saturationAmount - 12);
 	}
 	else {
 		makeupGain = (int32_t)(1154084861100017408uLL / (uint32_t)fineGain);

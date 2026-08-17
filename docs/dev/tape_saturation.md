@@ -18,9 +18,9 @@ Rough guide to the knob:
 | Range | Behaviour |
 |---|---|
 | 0 | Off (bypassed entirely) |
-| 1–30% | Transparent-to-gentle: unity level, peaks just start rounding, slight thickening |
-| 30–60% | Clearly audible tape warmth: softened top end, 2nd/3rd harmonic body, peak compression |
-| 60–100% | Rising drive: quieter sources get boosted (up to +13dB) into full tape crush |
+| 1–40% | Transparent-to-gentle: unity level, peaks just start rounding, slight thickening |
+| 40–75% | Clearly audible tape warmth: softened top end, 2nd/3rd harmonic body, peak compression |
+| 75–100% | Rising drive: quieter sources get boosted (up to +12dB) into full tape crush |
 
 Because the lower half is unity-gain, it works as a master-bus "glue" insert without changing the
 mix level; the upper half behaves like a conventional drive knob so that quiet material (a single
@@ -60,14 +60,14 @@ words per channel; it is reset whenever the effect transitions from off to on.
 
 ### Knob taper and gain staging
 
-The knob has two regimes that meet continuously at the crossover (`saturationAmount` 13,
-~62% of travel):
+The knob has two regimes that meet continuously at the crossover (`saturationAmount` 12,
+75% of travel):
 
 - **Below**: small-signal gain is exactly unity (a q28 makeup multiplier cancels both the table's
   centre slope and the fine gain), and each drive step lowers the ceiling that peaks squash into
-  by 6dB (from ~2^25.4 down to ~2^20.4 in internal units). Character changes; level doesn't.
-- **Above**: the ceiling holds at ~2^20.4 and small-signal gain instead rises 6dB per step
-  (`g = 2^(sat−13) · fineGain`, exactly 1.0 at the boundary — no level pop while sweeping).
+  by 6dB (from ~2^27.4 down to ~2^21.4 in internal units). Character changes; level doesn't.
+- **Above**: the ceiling holds at ~2^21.4 and small-signal gain instead rises 6dB per step
+  (`g = 2^(sat−12) · fineGain`, exactly 1.0 at the boundary — no level pop while sweeping).
   This exists because a pure unity-gain/falling-ceiling design is level-dependent: internal
   levels differ hugely between a full synth patch (~2^22 peaks) and a lone cowbell sample, and
   without the rising regime quiet sources never reached the shaper at all.
@@ -75,7 +75,9 @@ The knob has two regimes that meet continuously at the crossover (`saturationAmo
 The absolute anchoring came from hardware iteration: Deluge internal levels at the post-FX
 insertion point sit far below q31 full scale (the stock Saturation applies input shifts of up to
 2^20 before its tanh for the same reason). The first calibration, derived from a synthetic test
-loop, was ~24–36dB too cold and was inaudible on hardware despite measuring beautifully.
+loop, was ~24dB too cold and inaudible on hardware despite measuring beautifully; an over-corrected
++12dB pass was then "much too crunchy" from 10% of the knob. The final anchoring splits the
+difference and moves the extra reach for quiet sources into the rising-drive regime alone.
 
 ### Fixed-point details worth knowing
 
@@ -99,14 +101,12 @@ It also renders audition WAVs of a synth loop at several drive settings. Final m
 
 | Knob | Small-signal gain | Ceiling (internal units) |
 |---|---|---|
-| 12.5% | −0.05dB | 2^24.4 |
-| 37.5% | −0.12dB | 2^22.4 |
-| 62.5% | −0.4dB (crossover) | 2^20.4 |
-| 87.5% | +10.0dB | 2^20.4 |
-| 100% | +12.9dB | 2^20.4 |
-
-Harmonics at a device-level 2^22 sine: H2 −36dB / H3 −34dB at 25%; H3 −16dB at 50%;
-full tape crush (H3 −10dB, ~10dB of limiting) at the top.
+| 12.5% | −0.05dB | 2^26.4 |
+| 37.5% | −0.10dB | 2^24.4 |
+| 62.5% | −0.26dB | 2^22.4 |
+| 75% | −0.37dB (crossover) | 2^21.4 |
+| 87.5% | +5.5dB | 2^21.4 |
+| 100% | +11.0dB | 2^21.4 |
 
 ## Integration points (checklist for similar params)
 
