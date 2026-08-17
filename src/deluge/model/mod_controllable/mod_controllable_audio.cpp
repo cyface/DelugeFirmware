@@ -404,15 +404,27 @@ void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer,
 	uint32_t positive =
 	    (uint32_t)paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION) + 2147483648u;
 
-	// Drive is fineGain * 2^driveShift, continuous across the whole knob. Of the +6 in saturationAmount, 2 undoes
-	// the /4 inherent in the q30 fine-gain multiply and 4 anchors the knob to real internal levels (which sit well
+	// Drive is fineGain * 2^driveShift, continuous across the whole knob. Of the +8 in saturationAmount, 2 undoes
+	// the /4 inherent in the q30 fine-gain multiply and 6 anchors the knob to real internal levels (which sit well
 	// below q31 full scale - the stock Saturation effect needs similar boosts before it bites).
-	uint32_t saturationAmount = (positive >> 29) + 6;
+	uint32_t saturationAmount = (positive >> 29) + 8;
 	int32_t fineGain = (int32_t)((1u << 30) + ((positive & 0x1FFFFFFF) << 1)); // q30, [1.0, 2.0)
 
-	// Post-shape makeup for unity small-signal gain: 8 / (tableSlope * fineGain), as q28 with a <<4 after the
-	// multiply. 1154084861100017408 = (8 / 1.998) * 2^58, with 1.998 the measured centre slope of tanH2d.
-	int32_t makeupGain = (int32_t)(1154084861100017408uLL / (uint32_t)fineGain);
+	// Post-shape makeup. 1154084861100017408 = (8 / 1.998) * 2^58, with 1.998 the measured centre slope of tanH2d.
+	// Below the crossover, gain is 8 / (tableSlope * fineGain) - unity small-signal gain, with drive lowering the
+	// ceiling peaks squash into. Above it the ceiling holds and small-signal gain rises 6dB per step instead
+	// (g = 2^(sat-13) * fineGain, exactly 1.0 at the boundary, so the knob sweep stays continuous): quiet sources
+	// get pushed up into the shaper rather than the ceiling dropping below their reach.
+	int32_t makeupGain;
+	int32_t makeupShift;
+	if (saturationAmount >= 13) {
+		makeupGain = (int32_t)(1154084861100017408uLL >> 30);
+		makeupShift = 4 + (int32_t)(saturationAmount - 13);
+	}
+	else {
+		makeupGain = (int32_t)(1154084861100017408uLL / (uint32_t)fineGain);
+		makeupShift = 4;
+	}
 
 	// A little input bias makes the shaper asymmetric for 2nd-harmonic warmth; the static output offset is
 	// subtracted straight back out and the DC blocker catches the signal-dependent remainder.
@@ -432,7 +444,7 @@ void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer,
 			int32_t driven = multiply_32x32_rshift32(pre, fineGain);
 			int32_t shaped =
 			    getTanHAntialiased(driven + biasInput, &tapeSatTanHWorkingValue[ch], saturationAmount) - outOffset;
-			shaped = multiply_32x32_rshift32(shaped, makeupGain) << 4;
+			shaped = multiply_32x32_rshift32(shaped, makeupGain) << makeupShift;
 			int32_t de = shaped + (*deEmphLast[ch] >> 1);
 			*deEmphLast[ch] = de;
 			int32_t y = de << 1;
