@@ -404,9 +404,10 @@ void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer,
 	uint32_t positive =
 	    (uint32_t)paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION) + 2147483648u;
 
-	// Drive is fineGain * 2^driveShift, continuous across the whole knob. The +2 in saturationAmount undoes the /4
-	// inherent in the q30 fine-gain multiply.
-	uint32_t saturationAmount = (positive >> 29) + 2;
+	// Drive is fineGain * 2^driveShift, continuous across the whole knob. Of the +6 in saturationAmount, 2 undoes
+	// the /4 inherent in the q30 fine-gain multiply and 4 anchors the knob to real internal levels (which sit well
+	// below q31 full scale - the stock Saturation effect needs similar boosts before it bites).
+	uint32_t saturationAmount = (positive >> 29) + 6;
 	int32_t fineGain = (int32_t)((1u << 30) + ((positive & 0x1FFFFFFF) << 1)); // q30, [1.0, 2.0)
 
 	// Post-shape makeup for unity small-signal gain: 8 / (tableSlope * fineGain), as q28 with a <<4 after the
