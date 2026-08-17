@@ -88,6 +88,12 @@ public:
 	bool isBitcrushingEnabled(ParamManager* paramManager);
 	bool isSRREnabled(ParamManager* paramManager);
 	bool isTapeSaturationEnabled(ParamManager* paramManager);
+
+	/// Base drive shift for tape saturation. The three insertion points run ~15dB apart (a lone Sound is much
+	/// quieter than the summed song master), so each context anchors the knob differently - same idea as the
+	/// stock Saturation's per-context shift bases. Default suits the song master; Sound and
+	/// GlobalEffectableForClip override hotter.
+	virtual uint32_t getTapeSaturationDriveBase() { return 4; }
 	bool hasBassAdjusted(ParamManager* paramManager);
 	bool hasTrebleAdjusted(ParamManager* paramManager);
 	ModelStackWithAutoParam* getParamFromMIDIKnob(MIDIKnob& knob, ModelStackWithThreeMainThings* modelStack) override;
