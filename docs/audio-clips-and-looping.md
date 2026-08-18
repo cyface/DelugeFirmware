@@ -220,6 +220,42 @@ sidebar loop pads (community setting "Grid view loop pads",
 empty pad in an audio column mid-playback creates and launches an armed clip in one
 gesture (`:4247-4254`).
 
+### Magenta ("purple") arming: take-stacking on new tracks
+
+Magenta is the audio-clip arming state where **every overdub pass becomes a new clip
+on a brand-new audio track** — a multitrack looper instead of sound-on-sound.
+
+**Arming it:** in the record-arming view (hold RECORD), pressing an audio clip's pad
+cycles three states (`view.cpp:2761-2780`): armed **red** (overdubs stay on this
+track) → armed **magenta** (`overdubsShouldCloneOutput = true`) → disarmed. The
+choice also becomes the song-wide default for audio clips.
+
+**What it does:** when a magenta overdub begins recording, the firmware creates a
+whole new `AudioOutput`, clones the original's settings into it, and points the new
+clip there (`audio_clip.cpp:288-305`). The handoff in `AudioOutput::cloneFrom`
+(`audio_output.cpp:65-91`) is the key detail:
+
+- The new track inherits the input channel and mode.
+- If the original was a Sampler/Looper that already holds a take, **the new track
+  becomes the sampler/looper and the original demotes to Player** ("we'll become the
+  new sampler/looper and the og will become a player"). Monitoring and
+  record-readiness always ride on the *newest* layer, while each finished take keeps
+  looping untouched on its own now-Player track.
+
+Each layer therefore gets its own fader, FX chain, mute pad — and can be re-recorded
+or deleted independently. That's the trade against Looper/FX in-place layering, where
+everything piles into one clip and layers can't be peeled apart afterward.
+
+**The magenta sidebar loop pad** in grid (and RECORD + section pad in rows, and the
+"Layering loop" MIDI command) is the continuous-layering variant: it *forces* the
+clone-output flag on (`playback_handler.cpp:3396-3398`) and auto-spawns the next
+overdub every pass (`session.cpp:232-238`) — each pass lands on its own new track
+with no stomps between layers. The red sidebar pad is the plain Loop command
+(close/open one layer at a time).
+
+Caveat: every layer spawns a track, so a long jam grows the song wide quickly, and
+each new track adds ongoing render cost.
+
 ---
 
 ## 8. Clip Mode: one-shots and fills
