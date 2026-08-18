@@ -213,6 +213,23 @@ cannot record (`audio_clip.cpp:140-143`).
 4. **Stomp B** to stop the transport. (Stomping B *instead* of step 3 also works:
    completed layers are kept; only the unfinished pass is discarded.)
 
+### Gotcha: "Create overdub from which clip?" **[HW-verified]**
+
+When no clip is empty, a stomp must open an overdub, and it needs a source clip: the
+pad you're physically holding, else the **current clip** — the one whose clip view
+you most recently entered (`playback_handler.cpp:3358-3372`). Deleting tracks can
+clear that, producing this popup (`:3417-3420`). Fix: tap into the clip you want to
+layer against and back out once — it's now "current" and stomps work hands-free
+again. The layering overdub then creates its own new cloned track (magenta is forced),
+so there is no need to copy clips manually.
+
+Related trap: copying a clip to another row (hold pad + tap empty row) puts the copy
+on the **same output**, and one output can only play one clip at a time — same-output
+clips are alternate takes, not layers. To split them, create a fresh audio track
+(rows: hold empty pad + press SELECT) and reassign the clip with **SHIFT + SELECT
+turn** in its clip view (`audio_clip_view.cpp:735-736`, `view.cpp:2260-2296`) — note
+this wipes undo history, and the clip adopts the destination track's input/mode/FX.
+
 ---
 
 ## 6. How looping actually plays back
