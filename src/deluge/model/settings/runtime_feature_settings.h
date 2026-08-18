@@ -41,6 +41,9 @@ enum RuntimeFeatureStateSyncScalingAction : uint32_t { SyncScaling = 0, Fill = 1
 
 enum RuntimeFeatureStateEmulatedDisplay : uint32_t { Hardware = 0, Toggle = 1, OnBoot = 2 };
 
+// Values are the per-channel brightness numerator (out of 255) applied to unarmed clip pads in grid view
+enum RuntimeFeatureStateGridUnarmedClipBrightness : uint32_t { Dim = 10, Medium = 28, Bright = 64 };
+
 /// Every setting needs to be declared in here
 enum RuntimeFeatureSettingType : uint32_t {
 	DrumRandomizer,
@@ -67,6 +70,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	TrimFromStartOfAudioClip,
 	ShowBatteryLevel,
 	RoundedCorners,
+	GridUnarmedClipBrightness,
 	MaxElement // Keep as boundary
 };
 
