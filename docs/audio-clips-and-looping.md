@@ -195,7 +195,7 @@ overdubs and lets active recordings close at their boundary
 (`playback_handler.cpp:301-311`). **Restart** jumps the session back to bar 0 while
 playing.
 
-### Two-button live-looping workflow **[HW-informed]**
+### Two-button live-looping workflow **[HW-verified]**
 
 Setup: rows layout at the zoom you want your loop length to be; audio track(s) with
 input set, Sampler or Looper mode for monitoring, left armed (default); count-in bars
@@ -233,8 +233,11 @@ pad you're physically holding, else the **current clip** — the one whose clip 
 you most recently entered (`playback_handler.cpp:3358-3372`). Deleting tracks can
 clear that, producing this popup (`:3417-3420`). Fix: tap into the clip you want to
 layer against and back out once — it's now "current" and stomps work hands-free
-again. The layering overdub then creates its own new cloned track (magenta is forced),
-so there is no need to copy clips manually.
+again — or simply hold that clip's pad while stomping, which takes priority
+(`:3358-3363`). The layering overdub then creates its own new cloned track (magenta
+is forced), so there is no need to copy clips manually. If you unplug/replug your
+instrument while sorting this out, remember a Player-mode track gives no monitoring —
+a silent take may just mean no input signal.
 
 Related trap: copying a clip to another row in **rows** layout (hold pad + tap empty
 row) puts the copy on the **same output**, and one output can only play one clip at a
