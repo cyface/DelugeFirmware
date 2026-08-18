@@ -238,7 +238,11 @@ independent tracks **[HW-verified problem; fixes verified in source]**:
   born active, so without muting, SHIFT+SELECT silently does nothing. Then enter the
   stuck clip and **SHIFT + turn SELECT** to move it (`audio_clip_view.cpp:735-736`,
   `view.cpp:2260-2296`). Wipes undo history; the clip adopts the destination track's
-  input/mode/FX.
+  input/mode/FX (a fresh track means input Left, Player mode — re-set Looper and the
+  input if you'll layer onto it). Afterward, **delete the scaffold empty clip** (hold
+  its pad + SAVE/DELETE) — it shares the new track, so until it's gone the moved clip
+  is "exclusive" with it. Don't be fooled by row position: in rows layout a clip's
+  row says nothing about its track — the moved clip stays in its old row.
 
 ---
 
