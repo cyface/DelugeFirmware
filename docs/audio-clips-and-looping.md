@@ -223,12 +223,22 @@ layer against and back out once — it's now "current" and stomps work hands-fre
 again. The layering overdub then creates its own new cloned track (magenta is forced),
 so there is no need to copy clips manually.
 
-Related trap: copying a clip to another row (hold pad + tap empty row) puts the copy
-on the **same output**, and one output can only play one clip at a time — same-output
-clips are alternate takes, not layers. To split them, create a fresh audio track
-(rows: hold empty pad + press SELECT) and reassign the clip with **SHIFT + SELECT
-turn** in its clip view (`audio_clip_view.cpp:735-736`, `view.cpp:2260-2296`) — note
-this wipes undo history, and the clip adopts the destination track's input/mode/FX.
+Related trap: copying a clip to another row in **rows** layout (hold pad + tap empty
+row) puts the copy on the **same output**, and one output can only play one clip at a
+time — same-output clips are alternate takes, not layers. Two ways to split them onto
+independent tracks **[HW-verified problem; fixes verified in source]**:
+
+- **Grid copy (cleanest):** in grid layout, hold the clip's pad and tap a pad in the
+  first empty column right of the last track — copying an audio clip into the
+  new-track column **creates a brand-new audio track**, cloning the settings
+  (`session_view.cpp:3809-3825`). Then delete the original from the shared track.
+- **Rows reassignment:** create a fresh audio track (hold empty pad + press SELECT)
+  and **mute its empty clip** — this matters: the clip mover only offers tracks with
+  no *active* session clip (`song.cpp:4746-4762`, `:5193-5196`), and new clips are
+  born active, so without muting, SHIFT+SELECT silently does nothing. Then enter the
+  stuck clip and **SHIFT + turn SELECT** to move it (`audio_clip_view.cpp:735-736`,
+  `view.cpp:2260-2296`). Wipes undo history; the clip adopts the destination track's
+  input/mode/FX.
 
 ---
 
