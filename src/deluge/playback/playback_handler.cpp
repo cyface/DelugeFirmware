@@ -3369,6 +3369,33 @@ doCreateNextOverdub:
 				clipIndexToCreateOverdubFrom = currentSong->sessionClips.getIndexForClip(clipToCreateOverdubFrom);
 			}
 
+			// Otherwise fall back to an active, record-armed audio clip with an input - e.g. after loading a
+			// song fresh, when there's no currentClip yet. Prefer one whose track is monitoring
+			// (sampler / looper), since that's the head of a layering chain.
+			if (!clipToCreateOverdubFrom) {
+				bool foundMonitoring = false;
+				for (int32_t c = 0; c < currentSong->sessionClips.getNumElements(); c++) {
+					Clip* candidate = currentSong->sessionClips.getClipAtIndex(c);
+					if (candidate->type != ClipType::AUDIO || !candidate->armedForRecording
+					    || !currentSong->isClipActive(candidate)) {
+						continue;
+					}
+					AudioOutput* candidateOutput = (AudioOutput*)candidate->output;
+					if (candidateOutput->inputChannel <= AudioInputChannel::NONE) {
+						continue;
+					}
+					bool monitoring = (candidateOutput->mode != AudioOutputMode::player);
+					if (!clipToCreateOverdubFrom || (monitoring && !foundMonitoring)) {
+						clipToCreateOverdubFrom = candidate;
+						clipIndexToCreateOverdubFrom = c;
+						foundMonitoring = monitoring;
+						if (foundMonitoring) {
+							break;
+						}
+					}
+				}
+			}
+
 			// If we've decided which Clip to create overdub from...
 			if (clipToCreateOverdubFrom) {
 
