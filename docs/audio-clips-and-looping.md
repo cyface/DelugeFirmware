@@ -164,20 +164,54 @@ Guitarists can't tap pads mid-pass. The Deluge's global MIDI commands solve this
 LEARN (LED blinks), and hit the pedal; notes, CCs, and program changes all learn
 (`menu_item/midi/command.h:34-39`).
 
-Map the pedal to **Loop** (not Record). Loop is the purpose-built looper-pedal command
-(`playback_handler.cpp:3336`):
-- If a clip is **recording**: punches it out at the end of the current pass and keeps
-  it looping — same as the pad tap.
-- If **nothing is recording**: opens the next overdub on the current clip.
-- So the workflow is: RECORD on, PLAY, play — **stomp** (close the loop at the bar
-  line) — **stomp** (open an overdub layer) — **stomp** (close it) — repeat.
+### The Loop / Layering loop state machine
 
-Caveat: if the focused clip isn't record-armed, the stomp falls back to toggling
-record mode (`:3380-3392`) — leave the clip armed (it is by default).
+**Loop** and **Layering loop** both run `loopCommand()` (`playback_handler.cpp:3285`),
+whose effect depends on the current state:
 
-**Layering loop** is the variant where each stomp continuously spawns the next layer
-without a closing stomp. **Record** as a pedal command is just the front-panel toggle
-(`:2868-2870`) — usable but less forgiving.
+| State when you stomp | Loop | Layering loop |
+|---|---|---|
+| Playback stopped | **Turns record mode on if off, and presses PLAY** (`:3290-3296`) → count-in runs if enabled → recording starts at bar 0 | same |
+| During the count-in | **Cancels everything** (`endPlayback()`, `:3298-3300`) | same |
+| Playing, a clip is recording (no pending overdub) | Punch-out: closes it at the end of the pass, keeps looping | same, **plus** creates the next overdub → starts the auto-chain |
+| Playing, a pending "next" clip exists | **Deletes the pending clip and exits record mode** (`:3327-3335`) — the "end the chain" stomp | same |
+| Playing, nothing recording | Opens one overdub on the current clip | Opens a self-chaining overdub |
+| Current clip not record-armed | Falls back to toggling record mode (`:3380-3392`) — leave clips armed (they are by default) | same |
+
+The auto-chain (`session.cpp:229-238`): every clip that begins recording as a
+layering overdub is immediately armed to stop **exactly one pass later**, and spawns
+the next pending clip — so once started, each pass is exactly one loop-length and
+lands in a new clip (on a new cloned track, since layering forces the magenta
+clone-output flag), hands-free. Overdubs copy the source clip's length
+(`clip.cpp:109-124`), so the length of the first clip sets the length of every layer.
+The chain follows *one* clip — the held or most-recently-entered one — so if several
+tracks record the first pass together, only the current one chains; the others close
+their take at the same bar line and loop it.
+
+The other transport commands: **Play** = the PLAY button (starts with count-in when
+record mode is on; stopping mid-recording discards only the in-flight unfinished
+pass). **Record** = the RECORD toggle; switching it off mid-play also deletes pending
+overdubs and lets active recordings close at their boundary
+(`playback_handler.cpp:301-311`). **Restart** jumps the session back to bar 0 while
+playing.
+
+### Two-button live-looping workflow **[HW-informed]**
+
+Setup: rows layout at the zoom you want your loop length to be; audio track(s) with
+input set, Sampler or Looper mode for monitoring, left armed (default); count-in bars
+set in SETTINGS → Recording; footswitch **A = Layering loop**, **B = Play**. Tracks
+that should only *play* need nothing — a non-Looper clip that already holds audio
+cannot record (`audio_clip.cpp:140-143`).
+
+1. **Stomp A** (stopped): record mode on, count-in plays, then every active, armed,
+   empty audio clip starts recording at bar 0.
+2. **Stomp A during the first pass**: the take closes at exactly one clip-length and
+   the chain starts — every subsequent pass automatically becomes a new clip/track,
+   all layers looping. (Skip this stomp and the first clip just keeps growing.)
+3. Play until done. **Stomp A** to end the chain: the pass you're in completes as the
+   final layer, record mode exits, everything loops.
+4. **Stomp B** to stop the transport. (Stomping B *instead* of step 3 also works:
+   completed layers are kept; only the unfinished pass is discarded.)
 
 ---
 
