@@ -213,6 +213,19 @@ cannot record (`audio_clip.cpp:140-143`).
 4. **Stomp B** to stop the transport. (Stomping B *instead* of step 3 also works:
    completed layers are kept; only the unfinished pass is discarded.)
 
+### Gotcha: starting when every clip already holds audio **[HW-verified]**
+
+The stomp-from-stopped only turns record mode on and starts playback
+(`playback_handler.cpp:3290-3296`) — recording at bar 0 happens only on **empty**
+armed clips. In a song where all clips are full, the count-in leads into plain
+playback; **stomp again once playing** to open the first overdub (it starts at the
+source clip's next loop start, quantized — no count-in needed).
+
+Also check arming: in the record-arming view, GREEN is not an arming color — it's
+the clip's normal active status showing through, i.e. **not armed**. An unarmed
+source clip makes the overdub stomp fall back to toggling record mode
+(`:3380-3392`). Arm it red or magenta first.
+
 ### Gotcha: "Create overdub from which clip?" **[HW-verified]**
 
 When no clip is empty, a stomp must open an overdub, and it needs a source clip: the
