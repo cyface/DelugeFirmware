@@ -3448,8 +3448,11 @@ RGB SessionView::gridRenderClipColor(Clip* clip, int32_t x, int32_t y, bool rend
 
 	// If clip is not active or grayed out - dim it
 	else if (!clip->activeIfNoSolo) {
-		resultColour =
-		    resultColour.transform([macroActive](auto chan) { return ((float)chan / 255) * (macroActive ? 64 : 10); });
+		uint32_t brightness = runtimeFeatureSettings.get(RuntimeFeatureSettingType::GridUnarmedClipBrightness);
+		if (macroActive && brightness < 64) {
+			brightness = 64;
+		}
+		resultColour = resultColour.transform([brightness](auto chan) { return ((float)chan / 255) * brightness; });
 	}
 
 	if (greyout) {

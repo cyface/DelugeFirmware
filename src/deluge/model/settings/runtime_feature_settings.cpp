@@ -102,6 +102,29 @@ static void SetupEmulatedDisplaySetting(RuntimeFeatureSetting& setting, deluge::
 	};
 }
 
+static void SetupGridUnarmedClipBrightnessSetting(RuntimeFeatureSetting& setting, deluge::l10n::String displayName,
+                                                  std::string_view xmlName,
+                                                  RuntimeFeatureStateGridUnarmedClipBrightness def) {
+	setting.displayName = displayName;
+	setting.xmlName = xmlName;
+	setting.value = static_cast<uint32_t>(def);
+
+	setting.options = {
+	    {
+	        .displayName = display->haveOLED() ? "Dim" : "DIM",
+	        .value = RuntimeFeatureStateGridUnarmedClipBrightness::Dim,
+	    },
+	    {
+	        .displayName = display->haveOLED() ? "Medium" : "MED",
+	        .value = RuntimeFeatureStateGridUnarmedClipBrightness::Medium,
+	    },
+	    {
+	        .displayName = display->haveOLED() ? "Bright" : "BRIT",
+	        .value = RuntimeFeatureStateGridUnarmedClipBrightness::Bright,
+	    },
+	};
+}
+
 void RuntimeFeatureSettings::init() {
 	using enum deluge::l10n::String;
 	// Drum randomizer
@@ -209,6 +232,12 @@ void RuntimeFeatureSettings::init() {
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SysexPresetReload],
 	                  STRING_FOR_COMMUNITY_FEATURE_SYSEX_PRESET_RELOAD, "sysexPresetReload",
 	                  RuntimeFeatureStateToggle::Off);
+
+	// GridUnarmedClipBrightness
+	SetupGridUnarmedClipBrightnessSetting(settings[RuntimeFeatureSettingType::GridUnarmedClipBrightness],
+	                                      STRING_FOR_COMMUNITY_FEATURE_GRID_UNARMED_CLIP_BRIGHTNESS,
+	                                      "gridUnarmedClipBrightness",
+	                                      RuntimeFeatureStateGridUnarmedClipBrightness::Dim);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

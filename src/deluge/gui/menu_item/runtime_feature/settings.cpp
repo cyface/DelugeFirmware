@@ -74,6 +74,7 @@ SettingToggle menuTrimFromStartOfAudioClip(RuntimeFeatureSettingType::TrimFromSt
 SettingToggle menuShowBatteryLevel(RuntimeFeatureSettingType::ShowBatteryLevel);
 RoundedCornersSettingToggle menuRoundedCorners(RuntimeFeatureSettingType::RoundedCorners);
 SettingToggle menuSysexPresetReload(RuntimeFeatureSettingType::SysexPresetReload);
+Setting menuGridUnarmedClipBrightness(RuntimeFeatureSettingType::GridUnarmedClipBrightness);
 
 std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettings> subMenuEntries{
     &menuDrumRandomizer,
@@ -100,7 +101,8 @@ std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettin
     &menuRoundedCorners,
     &menuTrimFromStartOfAudioClip,
     &menuShowBatteryLevel,
-    &menuSysexPresetReload};
+    &menuSysexPresetReload,
+    &menuGridUnarmedClipBrightness};
 
 Settings::Settings(l10n::String name, l10n::String title) : menu_item::Submenu(name, title, subMenuEntries) {
 }
