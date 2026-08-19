@@ -55,6 +55,12 @@ public:
 	Error claimAudioFileForAudioClip();
 	void scrollFinished() override;
 	bool importFolderAsKit();
+	bool importFolderAsVelocityLayers();
+	/// A whole-kit import adds a drum per file, so it needs a brand-new kit to add them to.
+	bool canImportWholeKit();
+	/// A velocity-layer import only rewrites the ranges of the drum already being edited, so it
+	/// has no such restriction - just the feature that makes the layers audible.
+	bool canImportFolderAsVelocityLayers();
 	bool importFolderAsMultisamples();
 	ActionResult timerCallback() override;
 	bool claimCurrentFile(int32_t mayDoPitchDetection = 1, int32_t mayDoSingleCycle = 1, int32_t mayDoWaveTable = 1,
@@ -84,7 +90,6 @@ private:
 	void displayCurrentFilename();
 	void previewIfPossible(int32_t movementDirection = 1);
 	void audioFileIsNowSet();
-	bool canImportWholeKit();
 	bool loadAllSamplesInFolder(bool detectPitch, int32_t* getNumSamples, Sample*** getSortArea,
 	                            bool* getDoingSingleCycle = nullptr, int32_t* getNumCharsInPrefix = nullptr);
 	Error getCurrentFilePath(String* path) override;

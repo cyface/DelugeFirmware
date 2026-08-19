@@ -54,6 +54,7 @@
 #include "model/instrument/kit.h"
 #include "model/model_stack.h"
 #include "model/note/note_row.h"
+#include "model/settings/runtime_feature_settings.h"
 #include "model/song/song.h"
 #include "modulation/automation/auto_param.h"
 #include "modulation/params/param_manager.h"
@@ -300,7 +301,9 @@ ActionResult SampleBrowser::timerCallback() {
 			// Kit
 			else if (soundEditor.editingKit()) {
 
-				if (canImportWholeKit()) {
+				// The whole-kit and slice options need a brand-new kit; the velocity-layer one doesn't,
+				// so open the menu if either is possible and let it hide the options that aren't.
+				if (canImportWholeKit() || canImportFolderAsVelocityLayers()) {
 					contextMenu = &gui::context_menu::sample_browser::kit;
 					goto considerContextMenu;
 				}
@@ -498,6 +501,10 @@ ActionResult SampleBrowser::buttonAction(deluge::hid::Button b, bool on, bool in
 	}
 
 	return ActionResult::DEALT_WITH;
+}
+
+bool SampleBrowser::canImportFolderAsVelocityLayers() {
+	return soundEditor.editingKit() && runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::DrumVelocityLayers);
 }
 
 bool SampleBrowser::canImportWholeKit() {
@@ -1879,6 +1886,171 @@ skipOctaveCorrection:
 	getCurrentInstrument()->beenEdited();
 
 	display->removeWorkingAnimation();
+	return true;
+}
+
+// Ranges are stored ordered on their top bound and two ranges can't share one, so a velocity split can
+// have at most one layer per velocity value. Nobody will ever hit this - RAM runs out long before - but
+// the bound arithmetic below would produce duplicates without it.
+constexpr int32_t kMaxVelocityLayers = kMaxMIDIValue;
+
+// The mirror image of importFolderAsKit(): instead of one drum per file, this makes *one* drum whose
+// layers are the files, softest first in filename order, with the velocity range split evenly between
+// them. Only useful with the Drum Velocity Layers feature on, which is what gates the menu option.
+bool SampleBrowser::importFolderAsVelocityLayers() {
+
+	AudioEngine::stopAnyPreviewing();
+
+	// Work the drum's name out before loading anything, while the browser's file list is still the one
+	// the user is looking at. A folder of layers is one instrument, so it's named after the folder.
+	String folderName;
+	{
+		FileItem* currentFileItem = getCurrentFileItem();
+		char const* nameSource = (currentFileItem != nullptr && currentFileItem->isFolder)
+		                             ? currentFileItem->filename.get()
+		                             : currentDir.get();
+		char const* lastSlash = strrchr(nameSource, '/');
+		folderName.set(lastSlash != nullptr ? lastSlash + 1 : nameSource);
+	}
+
+	display->displayLoadingAnimationText("Working");
+
+	int32_t numSamples;
+	Sample** sortArea;
+	bool success = loadAllSamplesInFolder(false, &numSamples, &sortArea, nullptr, nullptr);
+	if (!success) {
+doReturnFalse:
+		display->removeWorkingAnimation();
+		return false;
+	}
+
+	if (numSamples <= 0) {
+		delugeDealloc(sortArea);
+		display->displayPopup(deluge::l10n::get(deluge::l10n::String::STRING_FOR_NO_SAMPLE));
+		goto doReturnFalse;
+	}
+
+	AudioEngine::routineWithClusterLoading();
+
+	Source* source = soundEditor.currentSource;
+	auto* drum = (SoundDrum*)soundEditor.currentSound;
+
+	// Do this before touching the ranges: switching osc type rebuilds them at the other type's size.
+	if (source->oscType != OscType::SAMPLE) {
+		soundEditor.currentSound->killAllVoices();
+		source->setOscType(OscType::SAMPLE);
+	}
+
+	int32_t numLayers = (numSamples > kMaxVelocityLayers) ? kMaxVelocityLayers : numSamples;
+
+	// Delete all but the first pre-existing range
+	for (int32_t i = source->ranges.getNumElements() - 1; i >= 1; i--) {
+		soundEditor.currentSound->deleteMultiRange(soundEditor.currentSourceIndex, i);
+	}
+
+	if (numLayers > 1) {
+		soundEditor.currentSound->killAllVoices();
+		AudioEngine::audioRoutineLocked = true;
+		bool gotSpace = source->ranges.ensureEnoughSpaceAllocated(numLayers - 1);
+		AudioEngine::audioRoutineLocked = false;
+
+		if (!gotSpace) {
+			for (int32_t s = 0; s < numSamples; s++) {
+				sortArea[s]->removeReason("E447"); // Remove that temporary reason loading added
+			}
+			delugeDealloc(sortArea);
+			display->displayError(Error::INSUFFICIENT_RAM);
+			goto doReturnFalse;
+		}
+	}
+
+	int32_t totalMSec = 0;
+
+	for (int32_t s = 0; s < numSamples; s++) {
+
+		if (!(s & 31)) {
+			AudioEngine::routineWithClusterLoading();
+		}
+
+		Sample* thisSample = sortArea[s];
+
+		if (s < numLayers) {
+			MultiRange* range;
+			if (s == 0) {
+				range = source->getOrCreateFirstRange();
+				if (range == nullptr) {
+					// The remaining samples still hold the reason loading added them
+					for (int32_t r = s; r < numSamples; r++) {
+						sortArea[r]->removeReason("E448");
+					}
+					delugeDealloc(sortArea);
+					display->displayError(Error::INSUFFICIENT_RAM);
+					goto doReturnFalse;
+				}
+			}
+			else {
+				range = source->ranges.insertMultiRange(s);
+				if (range == nullptr) {
+					// Shouldn't happen, since the space was reserved above. If it somehow does, stop
+					// adding layers and re-open the bound on the one we did manage, so the loudest
+					// hits still sound something instead of falling off the top of the split.
+					source->ranges.getElement(s - 1)->topNote = 32767;
+					numLayers = s;
+					thisSample->removeReason("E456");
+					continue;
+				}
+			}
+
+			// Split the velocity range evenly. The last layer keeps the open-ended 32767 bound that a
+			// last range always has, which is what makes it catch velocity 127.
+			range->topNote = (s == numLayers - 1) ? 32767 : (kMaxMIDIValue * (s + 1)) / numLayers;
+
+			AudioFileHolder* holder = range->getAudioFileHolder();
+			holder->setAudioFile(nullptr);
+			holder->filePath.set(&thisSample->filePath);
+			holder->setAudioFile(thisSample, source->sampleControls.isCurrentlyReversed(), true);
+
+			if (s == 0) {
+				autoDetectSideChainSending(drum, source, thisSample->filePath.get());
+			}
+
+			totalMSec += thisSample->getLengthInMSec();
+		}
+
+		thisSample->removeReason("E455"); // Remove that temporary reason loading added
+	}
+
+	delugeDealloc(sortArea);
+
+	int32_t averageMSec = totalMSec / numLayers;
+	source->repeatMode = (averageMSec < 2002) ? SampleRepeatMode::ONCE : SampleRepeatMode::CUT;
+
+	if (!folderName.isEmpty()) {
+		Kit* kit = getCurrentKit();
+		Drum* clashing = kit->getDrumFromName(folderName.get());
+		if (clashing != nullptr && clashing != drum) {
+			kit->makeDrumNameUnique(&folderName, 2);
+		}
+		drum->drumName = folderName.get();
+	}
+
+	audioFileIsNowSet();
+
+	// Land on the softest layer, so the range menu opens showing the bottom of the split
+	soundEditor.setCurrentMultiRange(0);
+
+	getCurrentInstrument()->beenEdited();
+
+	exitAndNeverDeleteDrum();
+	uiNeedsRendering(&instrumentClipView);
+	display->removeWorkingAnimation();
+
+	if (numSamples > numLayers) {
+		display->displayPopup(deluge::l10n::get(deluge::l10n::String::STRING_FOR_TOO_MANY_VELOCITY_LAYERS));
+	}
+	else {
+		display->displayPopup(deluge::l10n::get(deluge::l10n::String::STRING_FOR_VELOCITY_LAYERS_CREATED));
+	}
 	return true;
 }
 

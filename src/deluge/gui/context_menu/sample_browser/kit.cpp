@@ -35,25 +35,30 @@ char const* Kit::getTitle() {
 std::span<char const*> Kit::getOptions() {
 	using enum l10n::String;
 	static char const* options[] = {
-	    l10n::get(STRING_FOR_LOAD_ALL), //<
-	    l10n::get(STRING_FOR_SLICE)     //<
+	    l10n::get(STRING_FOR_LOAD_ALL),        //<
+	    l10n::get(STRING_FOR_VELOCITY_LAYERS), //<
+	    l10n::get(STRING_FOR_SLICE)            //<
 	};
-	return {options, 2};
+	return {options, 3};
 }
 
 bool Kit::isCurrentOptionAvailable() {
 	switch (currentOption) {
 	case 0: // "ALL" option - to import whole folder. Works whether they're currently on a file or a folder.
-		return true;
+		return sampleBrowser.canImportWholeKit();
+	case 1: // Velocity layers - into the drum being edited, so no brand-new-kit requirement.
+		return sampleBrowser.canImportFolderAsVelocityLayers();
 	default: // Slicer option - only works if currently on a file, not a folder.
-		return (!sampleBrowser.getCurrentFileItem()->isFolder);
+		return sampleBrowser.canImportWholeKit() && !sampleBrowser.getCurrentFileItem()->isFolder;
 	}
 }
 
 bool Kit::acceptCurrentOption() {
 	switch (currentOption) {
-	case 0: // Import whole folder
+	case 0: // Import whole folder, one drum per file
 		return sampleBrowser.importFolderAsKit();
+	case 1: // Import whole folder as the velocity layers of one drum
+		return sampleBrowser.importFolderAsVelocityLayers();
 	default: // Slicer
 		display->setNextTransitionDirection(1);
 		openUI(&slicer);

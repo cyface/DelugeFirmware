@@ -3,8 +3,8 @@
 Design notes for giving kit drums velocity-switched samples — the thing that separates a sampled
 kit that sounds like a drummer from one that sounds like a drum machine.
 
-**Status:** phases 1 and 2 have landed, behind the `drumVelocityLayers` community feature (off by
-default). Phase 3 has not. See "What landed" at the end for the as-built notes.
+**Status:** all three phases have landed, behind the `drumVelocityLayers` community feature (off by
+default). See "What landed" at the end for the as-built notes.
 
 ## The problem
 
@@ -103,7 +103,7 @@ computes note midpoints. `gui/menu_item/sample/transpose.h` also renders range b
 All of it needs to show plain velocity numbers when the source is velocity-keyed. Worth keeping as
 a separate change rather than bundling into the Phase 1 PR.
 
-## Phase 3 — import flow *(not started)*
+## Phase 3 — import flow *(landed)*
 
 `SampleBrowser::importFolderAsKit()` currently creates one drum per file. A velocity-layer import
 wants the opposite shape: one drum, N ranges, bounds distributed across velocity. New flow, new UI,
@@ -222,4 +222,43 @@ at `rangeTopVelocity` 62 and 63. Those bounds separate the two lookups: a drum a
 velocity-keying must pick range 2. Auditioning the row gave 220 Hz with the feature off and 4 kHz
 with it on, and re-saving the song wrote `rangeTopVelocity` back with the same bounds.
 
-Still open from "Risks": the memory cost of N resident layers per drum has **not** been measured.
+### Phase 3, the import
+
+A third option, "Velocity layers", sits beside "Load all" and "Slice" in the sample browser's
+context menu (long-press SELECT). It imports the folder as the layers of the **one drum being
+edited**: the files in filename order, softest first, with the velocity range split evenly and the
+last layer left open-ended so it catches 127. The drum takes the folder's name.
+
+Because it only rewrites the ranges of a drum that already exists, it deliberately does **not**
+carry the brand-new-kit restriction that "Load all" and "Slice" have — those add drums, this does
+not. The menu now opens whenever either kind of import is possible and hides the options that
+aren't, so on an established kit "Velocity layers" is the only one offered.
+
+Two things worth knowing about the folder it expects:
+
+- One folder is one drum. It must hold exactly one file per layer — no round-robin alternates and
+  no second articulation mixed in, or they become layers of their own.
+- Ordering is the browser's existing `strcmpspecial`, which compares digit runs numerically, so an
+  unpadded `vl1 … vl36` ladder sorts correctly. It also interprets note names in filenames, which
+  is wanted for multisamples and merely harmless here unless a layer name happens to contain one.
+
+### Verified
+
+The three phases were checked in DelugEmu.
+
+Playback and serialization, with a one-drum kit whose three ranges are 220 Hz / 1 kHz / 4 kHz tones
+split at `rangeTopVelocity` 62 and 63. Those bounds separate the two lookups: a drum always sounds
+`kNoteForDrum` (60) and the default audition velocity is 64, so note-keying must pick range 0 and
+velocity-keying range 2. Auditioning gave 220 Hz with the feature off and 4 kHz with it on, and
+re-saving the song wrote `rangeTopVelocity` back with the same bounds.
+
+The import, against the real Virtuosity Drums library: `mid_snare_center_vl1 … vl36` converted to
+WAV with the names left unpadded. It produced 36 ranges, in true numeric order (`vl2` before
+`vl10`), bounds strictly increasing at 3, 7, 10 … 123 with the last open-ended, the drum renamed
+after the folder, and the other drum in the kit untouched. The imported drum sounded.
+
+### Still open
+
+The memory cost of N resident layers per drum has **not** been measured properly. The 36-layer
+import above (11 MB of samples on one drum) completed and played without running out, which is a
+useful data point but not a measurement, and says nothing about nine such drums at once.
