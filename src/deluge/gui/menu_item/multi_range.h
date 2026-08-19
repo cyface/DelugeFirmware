@@ -21,6 +21,11 @@
 
 namespace deluge::gui::menu_item {
 
+/// Renders one MultiRange bound into `buffer`: a note name for note-keyed Sources, or a plain 0-127
+/// number for the velocity-keyed Sources of a drum. `getLength`, if given, receives the printed length
+/// the same way noteCodeToString() reports it.
+void rangeBoundToString(int32_t bound, char* buffer, int32_t* getLength = nullptr);
+
 class MultiRange final : public Range {
 public:
 	using Range::Range;
@@ -39,9 +44,8 @@ protected:
 	             bool mayShowJustOne = true) override;
 	bool mayEditRangeEdge(RangeEdit whichEdge) override;
 
-	[[nodiscard]] std::string_view getTitle() const override {
-		return l10n::getView(l10n::String::STRING_FOR_NOTE_RANGE);
-	};
+	// Defined out of line because it has to consult the Sound currently being edited.
+	[[nodiscard]] std::string_view getTitle() const override;
 	void drawPixelsForOled() override;
 
 	// NOTE: this isn't strictly speaking needed, but refactoring the selectEncoderAction() and

@@ -204,6 +204,11 @@ void RuntimeFeatureSettings::init() {
 	// Rounded Corners
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::RoundedCorners], STRING_FOR_COMMUNITY_FEATURE_ROUNDED_CORNERS,
 	                  "roundedCorners", RuntimeFeatureStateToggle::On);
+
+	// Drum Velocity Layers
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::DrumVelocityLayers],
+	                  STRING_FOR_COMMUNITY_FEATURE_DRUM_VELOCITY_LAYERS, "drumVelocityLayers",
+	                  RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

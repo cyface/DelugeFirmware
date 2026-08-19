@@ -27,6 +27,7 @@
 #include "processing/sound/sound.h"
 #include "processing/source.h"
 #include "storage/multi_range/multisample_range.h"
+#include "util/d_string.h"
 #include "util/functions.h"
 #include <cstring>
 #include <etl/vector.h>
@@ -34,6 +35,29 @@
 namespace deluge::gui::menu_item {
 
 MultiRange multiRangeMenu{};
+
+namespace {
+bool editingVelocityKeyedRanges() {
+	return soundEditor.currentSound != nullptr && soundEditor.currentSound->rangesKeyedByVelocity();
+}
+} // namespace
+
+void rangeBoundToString(int32_t bound, char* buffer, int32_t* getLength) {
+	if (!editingVelocityKeyedRanges()) {
+		noteCodeToString(bound, buffer, getLength);
+		return;
+	}
+
+	intToString(bound, buffer);
+	if (getLength != nullptr) {
+		*getLength = strlen(buffer);
+	}
+}
+
+std::string_view MultiRange::getTitle() const {
+	return l10n::getView(editingVelocityKeyedRanges() ? l10n::String::STRING_FOR_VELOCITY_RANGE
+	                                                  : l10n::String::STRING_FOR_NOTE_RANGE);
+}
 
 void MultiRange::beginSession(MenuItem* navigatedBackwardFrom) {
 
@@ -348,8 +372,8 @@ void MultiRange::getText(char* buffer, int32_t* getLeftLength, int32_t* getRight
 		}
 	}
 	else {
-		int32_t note = soundEditor.currentSource->ranges.getElement(this->getValue() - 1)->topNote + 1;
-		noteCodeToString(note, buffer, getLeftLength);
+		int32_t bound = soundEditor.currentSource->ranges.getElement(this->getValue() - 1)->topNote + 1;
+		rangeBoundToString(bound, buffer, getLeftLength);
 	}
 
 	char* bufferPos = buffer + strlen(buffer);
@@ -376,16 +400,16 @@ void MultiRange::getText(char* buffer, int32_t* getLeftLength, int32_t* getRight
 		}
 	}
 	else {
-		int32_t note = soundEditor.currentSource->ranges.getElement(this->getValue())->topNote;
+		int32_t bound = soundEditor.currentSource->ranges.getElement(this->getValue())->topNote;
 
 		if (mayShowJustOne && this->getValue() > 0
-		    && note == soundEditor.currentSource->ranges.getElement(this->getValue() - 1)->topNote + 1) {
+		    && bound == soundEditor.currentSource->ranges.getElement(this->getValue() - 1)->topNote + 1) {
 			return;
 		}
 
 		*(bufferPos++) = '-';
 		*(bufferPos++) = ' ';
-		noteCodeToString(note, bufferPos, getRightLength);
+		rangeBoundToString(bound, bufferPos, getRightLength);
 	}
 }
 

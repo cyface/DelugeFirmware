@@ -226,8 +226,10 @@ bool Voice::noteOn(ModelStackWithSoundFlags* modelStack, int32_t newNoteCodeBefo
 			if (sound.getSynthMode() != SynthMode::FM
 			    && (sound.sources[s].oscType == OscType::SAMPLE || sound.sources[s].oscType == OscType::WAVETABLE)) {
 
-				// Set up MultiRange
-				MultiRange* range = sound.sources[s].getRange(noteCodeAfterArpeggiation + sound.transpose);
+				// Set up MultiRange. Kit drums may be keyed on velocity instead of note - see
+				// Sound::rangesKeyedByVelocity().
+				MultiRange* range =
+				    sound.sources[s].getRange(sound.getRangeKey(noteCodeAfterArpeggiation + sound.transpose, velocity));
 				if (!range) { // There could be no Range for a SAMPLE or WAVETABLE Source that just hasn't had a file
 					          // loaded, like how OSC2 very often would be sitting
 					goto gotInactive;

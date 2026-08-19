@@ -61,8 +61,8 @@ void Source::destructAllMultiRanges() {
 }
 
 // Only to be called if already determined that oscType == OscType::SAMPLE
-int32_t Source::getLengthInSamplesAtSystemSampleRate(int32_t note, bool forTimeStretching) {
-	MultiRange* range = getRange(note);
+int32_t Source::getLengthInSamplesAtSystemSampleRate(int32_t key, bool forTimeStretching) {
+	MultiRange* range = getRange(key);
 	if (range != nullptr) {
 		return ((SampleHolder*)range->getAudioFileHolder())->getLengthInSamplesAtSystemSampleRate(forTimeStretching);
 	}
@@ -134,7 +134,7 @@ void Source::setReversed(bool newReversed) {
 	}
 }
 
-MultiRange* Source::getRange(int32_t note) {
+MultiRange* Source::getRange(int32_t key) {
 	if (ranges.getNumElements() == 1) {
 		return ranges.getElement(0);
 	}
@@ -142,7 +142,7 @@ MultiRange* Source::getRange(int32_t note) {
 		return nullptr;
 	}
 	else {
-		defaultRangeI = ranges.search(note, GREATER_OR_EQUAL);
+		defaultRangeI = ranges.search(key, GREATER_OR_EQUAL);
 		if (defaultRangeI == ranges.getNumElements()) {
 			defaultRangeI--;
 		}
@@ -150,12 +150,12 @@ MultiRange* Source::getRange(int32_t note) {
 	}
 }
 
-int32_t Source::getRangeIndex(int32_t note) {
+int32_t Source::getRangeIndex(int32_t key) {
 	if (ranges.getNumElements() <= 1) {
 		return 0;
 	}
 	else {
-		int32_t e = ranges.search(note, GREATER_OR_EQUAL);
+		int32_t e = ranges.search(key, GREATER_OR_EQUAL);
 		if (e == ranges.getNumElements()) {
 			e--;
 		}

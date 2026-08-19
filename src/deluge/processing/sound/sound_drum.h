@@ -39,6 +39,10 @@ public:
 	void killAllVoices() override;
 
 	bool isDrum() override { return true; }
+
+	/// Kit drums always sound kNoteForDrum, so their MultiRange sort key is free to be read as a velocity
+	/// instead. Gated on the Drum Velocity Layers community feature.
+	[[nodiscard]] bool rangesKeyedByVelocity() const override;
 	void noteOn(ModelStackWithThreeMainThings* modelStack, uint8_t velocity, int16_t const* mpeValues,
 	            int32_t fromMIDIChannel = MIDI_CHANNEL_NONE, uint32_t sampleSyncLength = 0, int32_t ticksLate = 0,
 	            uint32_t samplesLate = 0) override;

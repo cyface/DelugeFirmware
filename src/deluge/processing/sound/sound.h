@@ -229,6 +229,17 @@ public:
 	[[nodiscard]] SynthMode getSynthMode() const { return synthMode; }
 
 	virtual bool isDrum() { return false; }
+
+	/// Whether this Sound's Sources pick their MultiRange by velocity rather than by note. Only kit drums
+	/// can: every drum hit sounds kNoteForDrum, so the note key is unused inside a kit row and is free to
+	/// be re-read as a velocity. Synths always stay note-keyed.
+	[[nodiscard]] virtual bool rangesKeyedByVelocity() const { return false; }
+
+	/// The key to search a Source's MultiRangeArray with for one hit. Callers pass the note already
+	/// transposed however that call site normally would; a velocity-keyed Sound ignores it.
+	[[nodiscard]] int32_t getRangeKey(int32_t transposedNote, int32_t velocity) const {
+		return rangesKeyedByVelocity() ? velocity : transposedNote;
+	}
 	void setupAsSample(ParamManagerForTimeline* paramManager);
 	void recalculateAllVoicePhaseIncrements(ModelStackWithSoundFlags* modelStack);
 	Error loadAllAudioFiles(bool mayActuallyReadFiles);
