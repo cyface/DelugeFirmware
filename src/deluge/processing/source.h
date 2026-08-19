@@ -55,12 +55,14 @@ public:
 	bool renderInStereo(Sound* s, SampleHolder* sampleHolder = nullptr);
 	void setCents(int32_t newCents);
 	void recalculateFineTuner();
-	int32_t getLengthInSamplesAtSystemSampleRate(int32_t note, bool forTimeStretching = false);
+	int32_t getLengthInSamplesAtSystemSampleRate(int32_t key, bool forTimeStretching = false);
 	void detachAllAudioFiles();
 	Error loadAllSamples(bool mayActuallyReadFiles);
 	void setReversed(bool newReversed);
-	int32_t getRangeIndex(int32_t note);
-	MultiRange* getRange(int32_t note);
+	/// `key` is a note number for note-keyed Sources and a velocity for velocity-keyed drum Sources -
+	/// the search is identical either way. Use Sound::getRangeKey() to work out which to pass.
+	int32_t getRangeIndex(int32_t key);
+	MultiRange* getRange(int32_t key);
 	MultiRange* getOrCreateFirstRange();
 	bool hasAtLeastOneAudioFileLoaded();
 	void doneReadingFromFile(Sound* sound);

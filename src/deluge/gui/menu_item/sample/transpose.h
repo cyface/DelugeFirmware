@@ -16,6 +16,7 @@
  */
 #pragma once
 #include "gui/menu_item/formatted_title.h"
+#include "gui/menu_item/multi_range.h"
 #include "gui/menu_item/source/transpose.h"
 #include "gui/ui/sound_editor.h"
 #include "model/instrument/kit.h"
@@ -163,9 +164,9 @@ public:
 			valueBuf.append(l10n::get(l10n::String::STRING_FOR_BOTTOM));
 		}
 		else {
-			char noteName[8];
-			noteCodeToString(source.ranges.getElement(rangeIndex - 1)->topNote + 1, noteName);
-			valueBuf.append(noteName);
+			char boundName[8];
+			rangeBoundToString(source.ranges.getElement(rangeIndex - 1)->topNote + 1, boundName);
+			valueBuf.append(boundName);
 		}
 
 		valueBuf.append("-");
@@ -174,9 +175,9 @@ public:
 			valueBuf.append("top");
 		}
 		else {
-			char noteName[8];
-			noteCodeToString(source.ranges.getElement(rangeIndex)->topNote, noteName);
-			valueBuf.append(noteName);
+			char boundName[8];
+			rangeBoundToString(source.ranges.getElement(rangeIndex)->topNote, boundName);
+			valueBuf.append(boundName);
 		}
 
 		valueBuf.append(")");

@@ -24,6 +24,7 @@
 #include "model/action/action_logger.h"
 #include "model/clip/clip.h"
 #include "model/instrument/kit.h"
+#include "model/settings/runtime_feature_settings.h"
 #include "model/song/song.h"
 #include "model/voice/voice.h"
 #include "processing/engines/audio_engine.h"
@@ -63,6 +64,10 @@ void SoundDrum::noteOn(ModelStackWithThreeMainThings* modelStack, uint8_t veloci
 
 	Sound::noteOn(modelStack, &arpeggiator, kNoteForDrum, mpeValues, sampleSyncLength, ticksLate, samplesLate, velocity,
 	              fromMIDIChannel);
+}
+
+bool SoundDrum::rangesKeyedByVelocity() const {
+	return runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::DrumVelocityLayers);
 }
 
 void SoundDrum::noteOff(ModelStackWithThreeMainThings* modelStack, int32_t velocity) {

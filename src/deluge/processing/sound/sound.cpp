@@ -1958,6 +1958,11 @@ bool Sound::allowNoteTails(ModelStackWithSoundFlags* modelStack, bool disregardS
 	return !anyActiveSources;
 }
 
+// These length queries happen at note-scheduling time, before any velocity is known. For a velocity-keyed
+// drum we ask about the loudest layer, which is the longest one on virtually every real drum recording -
+// and hasCutOrLoopModeSamples() wants the maximum anyway.
+constexpr int32_t kVelocityForLengthQuery = kMaxMIDIValue;
+
 int32_t Sound::hasAnyTimeStretchSyncing(ParamManagerForTimeline* paramManager, bool getSampleLength, int32_t note) {
 
 	if (synthMode == SynthMode::FM) {
@@ -1971,7 +1976,8 @@ int32_t Sound::hasAnyTimeStretchSyncing(ParamManagerForTimeline* paramManager, b
 		if (sourceEverActive && sources[s].oscType == OscType::SAMPLE
 		    && sources[s].repeatMode == SampleRepeatMode::STRETCH) {
 			if (getSampleLength) {
-				return sources[s].getLengthInSamplesAtSystemSampleRate(note + transpose, true);
+				return sources[s].getLengthInSamplesAtSystemSampleRate(
+				    getRangeKey(note + transpose, kVelocityForLengthQuery), true);
 			}
 			return 1;
 		}
@@ -2010,7 +2016,8 @@ int32_t Sound::hasCutOrLoopModeSamples(ParamManagerForTimeline* paramManager, in
 			if (anyLooping && sources[s].repeatMode == SampleRepeatMode::LOOP) {
 				*anyLooping = true;
 			}
-			int32_t length = sources[s].getLengthInSamplesAtSystemSampleRate(note);
+			int32_t length =
+			    sources[s].getLengthInSamplesAtSystemSampleRate(getRangeKey(note, kVelocityForLengthQuery));
 
 			// TODO: need a bit here to take into account the fact that the note pitch may well have lengthened or
 			// shortened the sample
@@ -3501,9 +3508,13 @@ Error Sound::readSourceFromFile(Deserializer& reader, int32_t s, ParamManagerFor
 							reader.readTagOrAttributeValueString(&holder->filePath);
 							reader.exitTag("fileName");
 						}
-						else if (!strcmp(tagName, "rangeTopNote")) {
+						// The same field, under two names: velocity-keyed drum ranges write
+						// "rangeTopVelocity" so the file says what its numbers mean. Both are always
+						// accepted, so old files keep loading and a preset stays readable whichever
+						// way round the Drum Velocity Layers feature is set.
+						else if (!strcmp(tagName, "rangeTopNote") || !strcmp(tagName, "rangeTopVelocity")) {
 							tempRange->topNote = reader.readTagOrAttributeValueInt();
-							reader.exitTag("rangeTopNote");
+							reader.exitTag(tagName);
 						}
 						else if (source->oscType != OscType::WAVETABLE) {
 							if (!strcmp(tagName, "zone")) {
@@ -3594,6 +3605,9 @@ gotError:
 #pragma GCC diagnostic pop
 
 void Sound::writeSourceToFile(Serializer& writer, int32_t s, char const* tagName) {
+	// What the range bounds actually mean, spelled out in the file rather than left to be inferred from
+	// whether this Sound happens to be a drum. Readers accept either name.
+	char const* const rangeTopAttributeName = rangesKeyedByVelocity() ? "rangeTopVelocity" : "rangeTopNote";
 
 	Source* source = &sources[s];
 
@@ -3628,7 +3642,7 @@ void Sound::writeSourceToFile(Serializer& writer, int32_t s, char const* tagName
 				writer.writeOpeningTagBeginning("sampleRange", true);
 
 				if (e != numRanges - 1) {
-					writer.writeAttribute("rangeTopNote", range->topNote);
+					writer.writeAttribute(rangeTopAttributeName, range->topNote);
 				}
 			}
 
@@ -3696,7 +3710,7 @@ void Sound::writeSourceToFile(Serializer& writer, int32_t s, char const* tagName
 					writer.writeOpeningTagBeginning("wavetableRange", true);
 
 					if (e != numRanges - 1) {
-						writer.writeAttribute("rangeTopNote", range->topNote);
+						writer.writeAttribute(rangeTopAttributeName, range->topNote);
 					}
 				}
 

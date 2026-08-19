@@ -72,6 +72,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	RoundedCorners,
 	SysexPresetReload,
 	GridUnarmedClipBrightness,
+	DrumVelocityLayers,
 	MaxElement // Keep as boundary
 };
 

@@ -238,6 +238,10 @@ void RuntimeFeatureSettings::init() {
 	                                      STRING_FOR_COMMUNITY_FEATURE_GRID_UNARMED_CLIP_BRIGHTNESS,
 	                                      "gridUnarmedClipBrightness",
 	                                      RuntimeFeatureStateGridUnarmedClipBrightness::Dim);
+	// Drum Velocity Layers
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::DrumVelocityLayers],
+	                  STRING_FOR_COMMUNITY_FEATURE_DRUM_VELOCITY_LAYERS, "drumVelocityLayers",
+	                  RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

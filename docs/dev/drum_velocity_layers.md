@@ -1,8 +1,10 @@
 # Drum Velocity Layers
 
 Design notes for giving kit drums velocity-switched samples — the thing that separates a sampled
-kit that sounds like a drummer from one that sounds like a drum machine. This is a design
-document only; no implementation has landed yet.
+kit that sounds like a drummer from one that sounds like a drum machine.
+
+**Status:** phases 1 and 2 have landed, behind the `drumVelocityLayers` community feature (off by
+default). Phase 3 has not. See "What landed" at the end for the as-built notes.
 
 ## The problem
 
@@ -46,7 +48,7 @@ last range open-ended — carry over to velocity unmodified.
 
 Synths keep note-keyed ranges. Nothing about existing presets changes.
 
-## Phase 1 — playback and serialization
+## Phase 1 — playback and serialization *(landed)*
 
 This is the PR-able core. It is useful on its own: presets can be authored externally (a script
 emitting the XML) with no on-device editing UI at all.
@@ -91,7 +93,7 @@ Standard registration: enum in `runtime_feature_settings.h`, setup in `runtime_f
 `strings.h`. Seven-segment strings are capped at 4 characters. Never edit `g_english.cpp` or
 `g_seven_segment.cpp` — they are regenerated during the build.
 
-## Phase 2 — on-device editing
+## Phase 2 — on-device editing *(landed)*
 
 `gui/menu_item/multi_range.cpp` (~470 lines) is where most of the actual effort lives, and it is
 note-oriented throughout: the range-bound nudging renders note names, and the range-splitting logic
@@ -101,7 +103,7 @@ computes note midpoints. `gui/menu_item/sample/transpose.h` also renders range b
 All of it needs to show plain velocity numbers when the source is velocity-keyed. Worth keeping as
 a separate change rather than bundling into the Phase 1 PR.
 
-## Phase 3 — import flow
+## Phase 3 — import flow *(not started)*
 
 `SampleBrowser::importFolderAsKit()` currently creates one drum per file. A velocity-layer import
 wants the opposite shape: one drum, N ranges, bounds distributed across velocity. New flow, new UI,
@@ -171,8 +173,20 @@ mechanical. It is not round-robin — same sample every time — but it is free 
 
 `pitch` (`LOCAL_PITCH_ADJUST`) is an exp param and combines additively, so it carries none of the
 multiplicative hazard described above. From `getExp`, `2^26` of patched value is exactly one
-octave, so one cent is `67108864 / 1200 ≈ 55924`; a cable of amount A with full-scale RANDOM gives
-a swing of ±A/2.
+octave, so one cent is `67108864 / 1200 ≈ 55924`.
+
+Beware the cable amount, though: pitch destinations do **not** use the raw amount.
+`getModifiedPatchCableAmount()` (`patch_cable_set.cpp`) squares it and divides by √2 —
+`strength = ((A >> 15) * (A >> 16)) * 0.7071` — so the swing is roughly `A²/2³¹ * 0.707`, not
+`A/2`. That is a pitch/delay-rate exception; linear params really do read the raw amount
+(`combineCablesLinear` in `patcher.cpp`), which is what makes it easy to miss. Solved against the
+real arithmetic, useful random→pitch amounts are:
+
+| Swing | Amount |
+|---|---|
+| ±4.7 cents | `0x02620000` |
+| ±9.4 cents | `0x035E8000` |
+| ±14 cents | `0x041D0000` |
 
 ## Round-robin
 
@@ -184,3 +198,28 @@ state per drum.
 
 Velocity layers should land first: the note key is already free, so the cost is far lower for
 comparable musical benefit.
+
+## What landed
+
+Phase 1 and Phase 2, gated on the `DrumVelocityLayers` community feature (`drumVelocityLayers` in
+`SETTINGS/CommunityFeatures.XML`), default off.
+
+- `Sound::rangesKeyedByVelocity()` is the gate; `SoundDrum` overrides it to return the feature
+  state. `Sound::getRangeKey(transposedNote, velocity)` picks which key to search with, and the
+  four range-lookup call sites go through it. `Source::getRange()` is unchanged apart from its
+  parameter being renamed `key`.
+- The two length queries in `sound.cpp` run before any velocity is known, so they ask about the
+  loudest layer (`kVelocityForLengthQuery`).
+- Serialization writes `rangeTopVelocity` for velocity-keyed sources and reads **either**
+  attribute always, so presets keep loading whichever way the feature is set.
+- The range editor (`multi_range.cpp`, `sample/transpose.h`) prints plain numbers instead of note
+  names for a velocity-keyed source, and the menu is titled "Velocity range". The range-nudging
+  and range-splitting arithmetic already worked on plain 0–127 values and needed no change.
+
+Verified in DelugEmu with a one-drum kit whose three ranges are 220 Hz / 1 kHz / 4 kHz tones split
+at `rangeTopVelocity` 62 and 63. Those bounds separate the two lookups: a drum always sounds
+`kNoteForDrum` (60) and the default audition velocity is 64, so note-keying must pick range 0 and
+velocity-keying must pick range 2. Auditioning the row gave 220 Hz with the feature off and 4 kHz
+with it on, and re-saving the song wrote `rangeTopVelocity` back with the same bounds.
+
+Still open from "Risks": the memory cost of N resident layers per drum has **not** been measured.
