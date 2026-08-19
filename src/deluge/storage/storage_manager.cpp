@@ -353,7 +353,9 @@ Error StorageManager::loadInstrumentFromFile(Song* song, InstrumentClip* clip, O
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
 		D_PRINTLN("reading instrument file failed -  %s", name->get());
-		if (!fileSuccess) {
+		// Only the close failed, so there is no more specific error to report. When reading
+		// itself failed, keep that error - it says far more than a generic card error would.
+		if (error == Error::NONE) {
 			error = Error::SD_CARD;
 		}
 
@@ -456,7 +458,9 @@ Error StorageManager::loadMidiDeviceDefinitionFile(MIDIInstrument* midiInstrumen
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
 		D_PRINTLN("reading midi device definition file failed -  %s", fileName->get());
-		if (!fileSuccess) {
+		// Only the close failed, so there is no more specific error to report. When reading
+		// itself failed, keep that error - it says far more than a generic card error would.
+		if (error == Error::NONE) {
 			error = Error::SD_CARD;
 		}
 
@@ -515,7 +519,9 @@ Error StorageManager::loadPatternFile(FilePointer* filePointer, String* fileName
 
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
-		if (!fileSuccess) {
+		// Only the close failed, so there is no more specific error to report. When reading
+		// itself failed, keep that error - it says far more than a generic card error would.
+		if (error == Error::NONE) {
 			error = Error::SD_CARD;
 		}
 
@@ -543,7 +549,9 @@ Error StorageManager::loadFavouriteFile(FilePointer* filePointer, String* fileNa
 
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
-		if (!fileSuccess) {
+		// Only the close failed, so there is no more specific error to report. When reading
+		// itself failed, keep that error - it says far more than a generic card error would.
+		if (error == Error::NONE) {
 			error = Error::SD_CARD;
 		}
 
@@ -580,16 +588,16 @@ Error StorageManager::loadSynthToDrum(Song* song, InstrumentClip* clip, bool may
 
 	// If that somehow didn't work...
 	if (error != Error::NONE || !fileSuccess) {
+		// Only the close failed, so there is no more specific error to report. When reading
+		// itself failed, keep that error - it says far more than a generic card error would.
+		if (error == Error::NONE) {
+			error = Error::SD_CARD;
+		}
 
 		void* toDealloc = static_cast<void*>(newDrum);
 		newDrum->~SoundDrum();
 		GeneralMemoryAllocator::get().dealloc(toDealloc);
 		return error;
-
-		if (!fileSuccess) {
-			error = Error::SD_CARD;
-			return error;
-		}
 	}
 	// these have to get cleared, otherwise we keep creating drums that aren't attached to note rows
 	if (*getInstrument) {
