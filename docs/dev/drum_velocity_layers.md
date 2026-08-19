@@ -122,11 +122,10 @@ Only four in the whole tree:
 
 ## Risks
 
-**Memory is the constraint, not code.** Every range holds a resident sample with cluster reasons
-claimed. A 9-drum kit at 4 velocity layers is 36 samples against the RZ/A1L's RAM. This should be
-measured before choosing a recommended layer count — it is the difference between 4 layers being
-comfortable and being the thing that makes the feature unusable on a full kit. Nothing in the code
-survey answers this; it needs a real test on hardware or in the emulator.
+**Memory was assumed to be the constraint. Measured, it isn't.** Every range holds a resident
+sample with cluster reasons claimed, so the worry was that a 9-drum kit at 4 velocity layers — 36
+samples against the RZ/A1L's RAM — would be the thing that makes the feature unusable. It is not;
+see "Measured cost" below. The real limit is SD streaming bandwidth and polyphony, not RAM.
 
 Stereo samples double the SD streaming bandwidth per voice, which compounds with polyphony on a
 busy kit.
@@ -257,8 +256,37 @@ WAV with the names left unpadded. It produced 36 ranges, in true numeric order (
 `vl10`), bounds strictly increasing at 3, 7, 10 … 123 with the last open-ended, the drum renamed
 after the folder, and the other drum in the kit untouched. The imported drum sounded.
 
+### Measured cost
+
+Measured in DelugEmu by reading the allocator's own free-space records live over the QEMU gdb stub —
+no firmware instrumentation and nothing written to the SD card. `GeneralMemoryAllocator::get()`'s
+instance is a function-local static (`nm` for `E22generalMemoryAllocator`), the release ELF carries
+full DWARF, and each `MemoryRegion` keeps an `emptySpaces` array whose lengths sum to that region's
+free space. Kits were built from distinct real samples (Virtuosity Drums, ~300 KB one-shots) so
+nothing was shared between layers.
+
+Bytes above an empty song, after loading the kit:
+
+| Kit | internal | + small regions | hard total | stealable | internal free |
+|---|---|---|---|---|---|
+| 1 drum, 1 layer | 12,296 | 464 | 12,760 | 8,960 | 85% |
+| 1 drum, 36 layers | 64,520 | 6,304 | 70,824 | 322,560 | 80% |
+| 9 drums, 1 layer | 138,824 | 2,080 | 140,904 | 80,640 | 74% |
+| **9 drums, 4 layers** | 180,808 | 7,296 | **188,104** | 322,560 | **70%** |
+| **16 drums, 4 layers** | 333,000 | 11,032 | **344,032** | 573,440 | **58%** |
+
+- An extra layer costs about **1.7 KB** of non-reclaimable RAM. The two independent estimates agree:
+  1,659 B from the 1×1 → 1×36 delta, 1,748 B from 9×1 → 9×4.
+- A drum with one sample costs about 15.7 KB, so the drum dominates the layer.
+- The stealable column is cluster cache in the 64 MB external region — under 1% of it, and
+  reclaimable by design.
+- A **full 16-row kit at 4 layers still leaves 58% of internal RAM free**, so 4 layers everywhere is
+  comfortable. 36 layers on a single drum is fine too.
+
+The one caveat: per-layer cost is dominated by each `Sample`'s cluster bookkeeping, which scales with
+sample *length*. These were short one-shots; long samples would cost proportionally more per layer.
+
 ### Still open
 
-The memory cost of N resident layers per drum has **not** been measured properly. The 36-layer
-import above (11 MB of samples on one drum) completed and played without running out, which is a
-useful data point but not a measurement, and says nothing about nine such drums at once.
+Nothing blocking. Round-robin alternates remain out of scope (see below), and none of this has been
+run on hardware yet — only in the emulator.
