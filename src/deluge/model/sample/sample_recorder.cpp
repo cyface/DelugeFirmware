@@ -526,7 +526,6 @@ gotError:
 			error = finalizeRecordedFile();
 			if (error != Error::NONE) {
 				hadCardError = true;
-				error = Error::SD_CARD;
 			}
 		}
 
