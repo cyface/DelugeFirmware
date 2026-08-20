@@ -13,6 +13,14 @@ set: page one stacks the qualities a lead sheet calls for (M, -, 7, -7, M7, -7b5
 the bottom up) so a standard is played by walking the root columns, with extensions and altered
 colours on the next pages. Edit it freely.
 
+`Progressions.XML` is made for the layout's **split mode** (the purple pad, fourth from the bottom
+of the rightmost column). Split mode turns the left seven columns into the scale degrees I-VII of
+the song's key, and the six columns to the right of the dark divider into a single-note grid tuned
+in fourths for soloing. Page one of `Progressions` stacks, from the bottom up, -7b5, 7, -7, -, M,
+M7, 6, M9 - so a ii-V-I is column 2 on the -7 row, column 5 on the 7 row, column 1 on the M7 row.
+The octave pads move the soloing hand; the horizontal encoder scrolls the chord hand by scale
+steps; the vertical encoder and page column still pick the chord page.
+
 ## Choosing a library
 
 In the chord library keyboard layout, the top pad of the rightmost column is the **library** pad.

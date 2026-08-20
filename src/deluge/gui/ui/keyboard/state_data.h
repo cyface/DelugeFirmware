@@ -65,6 +65,11 @@ struct KeyboardStateChordLibrary {
 	/// Play single notes on an isomorphic grid instead of chords, for dropping into a lead line.
 	/// Deliberately shares KeyboardStateIsomorphic, so it is the same surface as the isomorphic layout.
 	bool leadMode = false;
+	/// Split the grid: the left hand plays the chord rows on scale-degree columns, the right hand plays single
+	/// notes on a grid tuned in fourths. Exclusive with leadMode.
+	bool splitMode = false;
+	/// Bottom-left note of the split mode's fourths grid. Shifted to the song's key on first render like noteOffset.
+	int32_t splitLeadOffset = (kOctaveSize * 4);
 	ChordList chordList{};
 };
 
