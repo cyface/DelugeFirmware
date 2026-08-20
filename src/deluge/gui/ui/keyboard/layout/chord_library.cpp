@@ -95,9 +95,17 @@ uint8_t KeyboardLayoutChordLibrary::noteFromLeadCoords(int32_t x, int32_t y) {
 	return std::clamp<int32_t>(iso.scrollOffset + x + y * iso.rowInterval, 0, 127);
 }
 
+uint8_t KeyboardLayoutChordLibrary::noteFromSplitLeadCoords(int32_t x, int32_t y) {
+	KeyboardStateChordLibrary& state = getState().chordLibrary;
+	return std::clamp<int32_t>(state.splitLeadOffset + (x - kSplitLeadFirstColumn) + y * kSplitLeadRowInterval, 0, 127);
+}
+
 int32_t KeyboardLayoutChordLibrary::bottomNote() {
 	if (usingLeadMode()) {
 		return noteFromLeadCoords(0, 0);
+	}
+	if (usingSplitMode()) {
+		return noteFromSplitLeadCoords(kSplitLeadFirstColumn, 0);
 	}
 	return noteFromCoords(0);
 }
@@ -108,6 +116,10 @@ void KeyboardLayoutChordLibrary::shiftOctave(int32_t direction) {
 	if (usingLeadMode()) {
 		KeyboardStateIsomorphic& iso = getState().isomorphic;
 		iso.scrollOffset = std::clamp<int32_t>(iso.scrollOffset + direction * kOctaveSize, 0, kMaxBottomNote);
+	}
+	// The chord hand stays put in split mode - its octave is set by the key - so the pads move the solo hand
+	else if (usingSplitMode()) {
+		state.splitLeadOffset = std::clamp<int32_t>(state.splitLeadOffset + direction * kOctaveSize, 0, kMaxBottomNote);
 	}
 	else if (usingScaleDegrees()) {
 		// An octave is a whole scale's worth of steps, however many notes that scale has
@@ -201,6 +213,16 @@ void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboard
 			drawChordName(note);
 			enableNote(note, velocity);
 			continue;
+		}
+
+		if (isSplitLeadColumn(pressed.x)) {
+			uint8_t note = noteFromSplitLeadCoords(pressed.x, pressed.y);
+			drawChordName(note);
+			enableNote(note, velocity);
+			continue;
+		}
+		if (!isChordColumn(pressed.x)) {
+			continue; // The divider between the two hands
 		}
 
 		if (usingDiatonicQuality()) {
@@ -330,10 +352,11 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 		return;
 	}
 
-	if (y == kControlRowLead) {
+	if (y == kControlRowLead || y == kControlRowSplit) {
 		char const* lead[2] = {"LEAD", "Playing: lead"};
+		char const* split[2] = {"SPLT", "Playing: chords + 4ths"};
 		char const* chords[2] = {"CHRD", "Playing: chords"};
-		display->displayPopup(state.leadMode ? lead : chords);
+		display->displayPopup(state.leadMode ? lead : usingSplitMode() ? split : chords);
 		return;
 	}
 
@@ -349,6 +372,11 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 			return;
 		}
 		if (y == kControlRowScaleDegree) {
+			if (usingSplitMode()) {
+				char const* text[2] = {"DEGR", "Split: always scale degree"};
+				display->displayPopup(text);
+				return;
+			}
 			char const* on[2] = {"DEGR", "Columns: scale degree"};
 			char const* off[2] = {"CHRM", "Columns: chromatic"};
 			display->displayPopup(state.scaleDegreeColumns ? on : off);
@@ -375,6 +403,24 @@ bool KeyboardLayoutChordLibrary::controlPadActive(int32_t x, int32_t y) {
 	return true;
 }
 
+void KeyboardLayoutChordLibrary::setSplitMode(bool on) {
+	KeyboardStateChordLibrary& state = getState().chordLibrary;
+	if (state.splitMode == on) {
+		return;
+	}
+	// Split mode forces scale-degree columns. If the plain grid is chromatic, hand the scroll position across
+	// so the first column stays on (or just below) the same note either way.
+	if (scaleModesActive() && !state.scaleDegreeColumns) {
+		if (on) {
+			state.degreeOffset = degreeIndexFromNote(state.noteOffset);
+		}
+		else {
+			state.noteOffset = noteFromDegreeIndex(state.degreeOffset);
+		}
+	}
+	state.splitMode = on;
+}
+
 void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
@@ -393,6 +439,13 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 	}
 	else if (y == kControlRowLead) {
 		state.leadMode = !state.leadMode;
+		if (state.leadMode) {
+			setSplitMode(false);
+		}
+	}
+	else if (y == kControlRowSplit) {
+		setSplitMode(!state.splitMode);
+		state.leadMode = false;
 	}
 	else if (y == kControlRowOctaveDown) {
 		shiftOctave(-1);
@@ -401,7 +454,7 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 		shiftOctave(1);
 	}
 	else if (y == kControlRowScaleDegree) {
-		if (scaleModesActive()) {
+		if (scaleModesActive() && !usingSplitMode()) {
 			// Keep both column modes pointing at roughly the same note so toggling doesn't jump the keyboard
 			if (state.scaleDegreeColumns) {
 				state.noteOffset = noteFromDegreeIndex(state.degreeOffset);
@@ -467,7 +520,7 @@ void KeyboardLayoutChordLibrary::handleHorizontalEncoder(int32_t offset, bool sh
 		for (int32_t idxPress = kMaxNumKeyboardPadPresses - 1; idxPress >= 0; --idxPress) {
 
 			PressedPad pressed = presses[idxPress];
-			if (pressed.active && pressed.x < kDisplayWidth) {
+			if (pressed.active && isChordColumn(pressed.x)) {
 
 				int32_t chordNo = getChordNo(pressed.y);
 
@@ -500,14 +553,17 @@ void KeyboardLayoutChordLibrary::precalculate() {
 	int32_t rootNote = getRootNote();
 	if (state.appliedRootNote < 0) {
 		state.noteOffset += rootNote;
+		state.splitLeadOffset += rootNote;
 	}
 	else if (state.appliedRootNote != rootNote) {
 		// Follow later key changes too. Without this the grid stays stranded on the old tonic, so changing
 		// the key to A leaves the first column on C and anything reporting that column names the wrong note.
 		state.noteOffset += rootNote - state.appliedRootNote;
+		state.splitLeadOffset += rootNote - state.appliedRootNote;
 	}
 	state.appliedRootNote = rootNote;
 	state.noteOffset = std::clamp<int32_t>(state.noteOffset, 0, kMaxBottomNote);
+	state.splitLeadOffset = std::clamp<int32_t>(state.splitLeadOffset, 0, kMaxBottomNote);
 
 	uint8_t hueStepSize = 192 / (kVerticalPages - 1); // 192 is the hue range for the rainbow
 	for (int32_t i = 0; i < pageColours.size(); ++i) {
@@ -553,8 +609,11 @@ void KeyboardLayoutChordLibrary::renderPads(RGB image[][kDisplayWidth + kSideBar
 		return;
 	}
 
+	bool split = usingSplitMode();
+	int32_t chordColumns = split ? kSplitChordColumns : kChordLibraryColumns;
+
 	// Iterate over grid image
-	for (int32_t x = 0; x < kChordLibraryColumns; x++) {
+	for (int32_t x = 0; x < chordColumns; x++) {
 		int32_t noteCode = noteFromCoords(x);
 		uint16_t noteWithinOctave = (uint16_t)((noteCode + kOctaveSize) - getRootNote()) % kOctaveSize;
 		RGB columnColour = getNoteColour((noteCode % state.rowInterval) * state.rowColorMultiplier);
@@ -595,6 +654,31 @@ void KeyboardLayoutChordLibrary::renderPads(RGB image[][kDisplayWidth + kSideBar
 		}
 	}
 
+	if (split) {
+		// Dark divider, then the fourths grid coloured like the lead grid: root bright, scale notes lit,
+		// everything else faint
+		for (int32_t y = 0; y < kDisplayHeight; ++y) {
+			image[y][kSplitDividerColumn] = colours::black;
+		}
+		for (int32_t x = kSplitLeadFirstColumn; x < kChordLibraryColumns; x++) {
+			for (int32_t y = 0; y < kDisplayHeight; ++y) {
+				int32_t noteCode = noteFromSplitLeadCoords(x, y);
+				uint16_t noteWithinOctave = (uint16_t)((noteCode + kOctaveSize) - getRootNote()) % kOctaveSize;
+				RGB colour = getNoteColour((noteCode % state.rowInterval) * state.rowColorMultiplier);
+
+				if (noteWithinOctave == 0) {
+					image[y][x] = colour;
+				}
+				else if (!inScaleMode || octaveScaleNotes.has(noteWithinOctave)) {
+					image[y][x] = colour.dim(2);
+				}
+				else {
+					image[y][x] = colour.dim(5);
+				}
+			}
+		}
+	}
+
 	renderControlColumn(image);
 }
 
@@ -631,7 +715,9 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	};
 
 	if (!lead) {
-		image[kControlRowScaleDegree][kControlColumn] = toggleColour(colours::darkblue, state.scaleDegreeColumns);
+		// Split mode fixes the columns to scale degrees, so the toggle shows as on but inert
+		image[kControlRowScaleDegree][kControlColumn] =
+		    usingSplitMode() ? colours::grey : toggleColour(colours::darkblue, state.scaleDegreeColumns);
 		image[kControlRowDiatonic][kControlColumn] = toggleColour(colours::green, state.diatonicQuality);
 
 		// The built-in set is dim, a library from the card is bright
@@ -643,6 +729,7 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	image[kControlRowOctaveUp][kControlColumn] = colours::cyan_full;
 	image[kControlRowOctaveDown][kControlColumn] = colours::cyan;
 	image[kControlRowLead][kControlColumn] = state.leadMode ? colours::pink : colours::pink.forTail();
+	image[kControlRowSplit][kControlColumn] = usingSplitMode() ? colours::purple : colours::purple.forTail();
 }
 
 void KeyboardLayoutChordLibrary::drawChordName(int16_t noteCode, const char* chordName, const char* voicingName) {

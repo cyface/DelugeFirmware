@@ -32,11 +32,20 @@ constexpr int32_t kControlColumn = kDisplayWidth - 1; // modes at the top, play 
 constexpr int32_t kPageColumn = kDisplayWidth - 2;    // one pad per page of the active library
 constexpr int32_t kChordLibraryColumns = kPageColumn;
 
+/// Split mode: seven chord columns (one per degree of a seven note scale), a dark divider, then a six column
+/// single-note grid tuned in fourths, like the low strings of a guitar or a bass.
+constexpr int32_t kSplitChordColumns = 7;
+constexpr int32_t kSplitDividerColumn = kSplitChordColumns;
+constexpr int32_t kSplitLeadFirstColumn = kSplitDividerColumn + 1;
+constexpr int32_t kSplitLeadRowInterval = 5;
+static_assert(kSplitLeadFirstColumn < kChordLibraryColumns, "Split mode needs room for the fourths grid");
+
 /// Control rows, as firmware row indices - row 0 is the BOTTOM of the display, matching the chord rows
-/// themselves. The gap at rows 3 and 4 separates the mode group from the play group.
+/// themselves. The gap at row 4 separates the mode group from the play group.
 constexpr int32_t kControlRowLead = 0;
 constexpr int32_t kControlRowOctaveDown = 1;
 constexpr int32_t kControlRowOctaveUp = 2;
+constexpr int32_t kControlRowSplit = 3;
 constexpr int32_t kControlRowScaleDegree = 5;
 constexpr int32_t kControlRowDiatonic = 6;
 constexpr int32_t kControlRowLibrary = 7;
@@ -71,11 +80,23 @@ private:
 
 	/// True when the scale-aware modes are actually in effect - they need a scale to work from
 	bool scaleModesActive() { return getScaleModeEnabled(); }
-	bool usingScaleDegrees() { return scaleModesActive() && getState().chordLibrary.scaleDegreeColumns; }
+	/// Split mode's chord columns are always scale degrees, that being the point of it
+	bool usingScaleDegrees() {
+		return scaleModesActive() && (getState().chordLibrary.scaleDegreeColumns || usingSplitMode());
+	}
 	bool usingDiatonicQuality() {
 		return scaleModesActive() && getState().chordLibrary.diatonicQuality && !getState().chordLibrary.leadMode;
 	}
 	bool usingLeadMode() { return getState().chordLibrary.leadMode; }
+	bool usingSplitMode() { return getState().chordLibrary.splitMode && !getState().chordLibrary.leadMode; }
+	/// Whether a grid column plays chords in the current mode
+	bool isChordColumn(int32_t x) { return x < (usingSplitMode() ? kSplitChordColumns : kChordLibraryColumns); }
+	/// Whether a grid column plays a single note on the split mode's fourths grid
+	bool isSplitLeadColumn(int32_t x) {
+		return usingSplitMode() && x >= kSplitLeadFirstColumn && x < kChordLibraryColumns;
+	}
+	/// Note under a pad of the split mode's fourths grid
+	uint8_t noteFromSplitLeadCoords(int32_t x, int32_t y);
 
 	/// Note under a grid pad while playing lead, on the same isomorphic grid as the isomorphic layout
 	uint8_t noteFromLeadCoords(int32_t x, int32_t y);
@@ -97,6 +118,8 @@ private:
 	const char* nameForIntervals(NoteSet intervals);
 
 	void handleControlPad(int32_t x, int32_t y);
+	/// Enter or leave split mode, carrying the column scroll position across
+	void setSplitMode(bool on);
 	/// Says what a control pad currently is, so holding one describes it and releasing confirms the change
 	void popupControlState(int32_t x, int32_t y);
 	void popupPage(int32_t page);

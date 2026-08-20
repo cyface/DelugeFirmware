@@ -114,9 +114,9 @@
 			<voicing notes="ROOT, MIN10, P5, MAJ14" />
 		</chord>
 		<chord name="AUG">
-			<voicing notes="ROOT, MIN3, AUG5" />
-			<voicing notes="ROOT, MIN10, AUG5" />
-			<voicing notes="ROOT, MIN10, AUG5, -OCT" />
+			<voicing notes="ROOT, MAJ3, AUG5" />
+			<voicing notes="ROOT, MAJ10, AUG5" />
+			<voicing notes="ROOT, MAJ10, AUG5, -OCT" />
 		</chord>
 		<chord name="7SUS4">
 			<voicing notes="ROOT, P4, P5, MIN7" />
