@@ -353,8 +353,10 @@ Error StorageManager::loadInstrumentFromFile(Song* song, InstrumentClip* clip, O
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
 		D_PRINTLN("reading instrument file failed -  %s", name->get());
-		if (!fileSuccess) {
-			error = Error::SD_CARD;
+		// When reading itself failed, keep that error - it says far more than the close
+		// failure would. Otherwise report the close failure as specifically as we can.
+		if (error == Error::NONE) {
+			error = fresultToDelugeErrorCode(fileSuccess);
 		}
 
 deleteInstrumentAndGetOut:
@@ -456,8 +458,10 @@ Error StorageManager::loadMidiDeviceDefinitionFile(MIDIInstrument* midiInstrumen
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
 		D_PRINTLN("reading midi device definition file failed -  %s", fileName->get());
-		if (!fileSuccess) {
-			error = Error::SD_CARD;
+		// When reading itself failed, keep that error - it says far more than the close
+		// failure would. Otherwise report the close failure as specifically as we can.
+		if (error == Error::NONE) {
+			error = fresultToDelugeErrorCode(fileSuccess);
 		}
 
 		return error;
@@ -515,8 +519,10 @@ Error StorageManager::loadPatternFile(FilePointer* filePointer, String* fileName
 
 	// If that somehow didn't work...
 	if (error != Error::NONE || fileSuccess != FR_OK) {
-		if (!fileSuccess) {
-			error = Error::SD_CARD;
+		// When reading itself failed, keep that error - it says far more than the close
+		// failure would. Otherwise report the close failure as specifically as we can.
+		if (error == Error::NONE) {
+			error = fresultToDelugeErrorCode(fileSuccess);
 		}
 
 		return error;
@@ -539,18 +545,12 @@ Error StorageManager::loadFavouriteFile(FilePointer* filePointer, String* fileNa
 
 	error = favouritesManager.loadFavouritesFromFile(smDeserializer);
 
-	FRESULT fileSuccess = activeDeserializer->closeWriter();
+	// A failed close is harmless here: the file was only being read, so by now the favourites
+	// are either fully loaded (keep them) or the read error below makes the caller reset the
+	// bank. Returning an error for the close alone would wipe a bank that loaded correctly.
+	activeDeserializer->closeWriter();
 
-	// If that somehow didn't work...
-	if (error != Error::NONE || fileSuccess != FR_OK) {
-		if (!fileSuccess) {
-			error = Error::SD_CARD;
-		}
-
-		return error;
-	}
-
-	return Error::NONE;
+	return error;
 }
 
 /**
@@ -576,20 +576,20 @@ Error StorageManager::loadSynthToDrum(Song* song, InstrumentClip* clip, bool may
 
 	error = newDrum->readFromFile(smDeserializer, song, clip, 0);
 
-	bool fileSuccess = activeDeserializer->closeWriter() == FR_OK;
+	FRESULT fileSuccess = activeDeserializer->closeWriter();
 
 	// If that somehow didn't work...
-	if (error != Error::NONE || !fileSuccess) {
+	if (error != Error::NONE || fileSuccess != FR_OK) {
+		// When reading itself failed, keep that error - it says far more than the close
+		// failure would. Otherwise report the close failure as specifically as we can.
+		if (error == Error::NONE) {
+			error = fresultToDelugeErrorCode(fileSuccess);
+		}
 
 		void* toDealloc = static_cast<void*>(newDrum);
 		newDrum->~SoundDrum();
 		GeneralMemoryAllocator::get().dealloc(toDealloc);
 		return error;
-
-		if (!fileSuccess) {
-			error = Error::SD_CARD;
-			return error;
-		}
 	}
 	// these have to get cleared, otherwise we keep creating drums that aren't attached to note rows
 	if (*getInstrument) {
