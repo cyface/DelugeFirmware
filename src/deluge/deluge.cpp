@@ -438,28 +438,36 @@ void setupStartupSong() {
 	auto defaultSongFullPath = "SONGS/DEFAULT.XML";
 	auto filename =
 	    startupSongMode == StartupSongMode::TEMPLATE ? defaultSongFullPath : runtimeFeatureSettings.getStartupSong();
-	String failSafePath;
-	failSafePath.concatenate("SONGS/__STARTUP_OFF_CHECK_");
-	auto size = strlen(filename) + 1;
 	// The messages we show to the user are mostly plain language, but
 	// for non-user facing errors we use codes. All messages are < 20 chars.
-	if (size > 2048) {
+
+	// Fixed-size buffer rather than a VLA: the path comes from user-editable CommunityFeatures.XML,
+	// so an oversized value gets refused instead of allocated on the stack mid-boot.
+	char replaced[256]; // filename with '/' replaced by '_', incl. NULL terminator
+	if (strlen(filename) + 1 > sizeof(replaced)) {
 		display->consoleText("Startup path too long");
 		return;
 	}
-
-	char replaced[sizeof(char) * strlen(filename) + 1]; // +1 for NULL terminator
 	replace_char(replaced, filename, '/', '_');
-	failSafePath.concatenate(replaced);
+
+	// If either concatenate fails we'd check/create the wrong canary file, so skip the startup song.
+	String failSafePath;
+	if (failSafePath.concatenate("SONGS/__STARTUP_OFF_CHECK_") != Error::NONE
+	    || failSafePath.concatenate(replaced) != Error::NONE) {
+		display->consoleText("Startup fault F5");
+		return;
+	}
 
 	if (StorageManager::fileExists(failSafePath.get())) {
 		// canary exists, previous boot failed?
 		display->consoleText("Startup fault F1");
 		return; // no cleanup, keep canary!
 	}
+	bool songKnownToExist = false;
 	switch (startupSongMode) {
 	case StartupSongMode::TEMPLATE: {
-		if (!StorageManager::fileExists(defaultSongFullPath)) {
+		songKnownToExist = StorageManager::fileExists(defaultSongFullPath);
+		if (!songKnownToExist) {
 			display->consoleText("Creating template");
 			currentSong->writeTemplateSong(defaultSongFullPath);
 		}
@@ -479,8 +487,8 @@ void setupStartupSong() {
 			display->consoleText("Startup fault F2");
 			return; // no canary, no cleanup
 		}
-		// Handle missing song
-		if (!StorageManager::fileExists(filename)) {
+		// Handle missing song (skip the repeat SD lookup when the template was already seen above)
+		if (!songKnownToExist && !StorageManager::fileExists(filename)) {
 			if (startupSongMode == StartupSongMode::TEMPLATE) {
 				// we tried to create it earlier, but didn't happen?
 				display->consoleText("Startup fault F3");
