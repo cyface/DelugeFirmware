@@ -107,7 +107,6 @@ private:
 	inline int32_t getChordNo(int32_t y) { return getState().chordLibrary.chordList.chordRowOffset + y; }
 
 	std::array<RGB, kVerticalPages> pageColours;
-	bool initializedNoteOffset = false;
 	/// Which control pad the held-pad description is currently showing, so it is emitted once per press
 	int8_t lastDescribedX = -1;
 	int8_t lastDescribedY = -1;

@@ -59,6 +59,9 @@ struct KeyboardStateChordLibrary {
 	bool diatonicQuality = false;
 	/// Scroll position for scaleDegreeColumns, counted in scale steps rather than semitones
 	int32_t degreeOffset = 0;
+	/// Root note that noteOffset currently reflects, so a later key change can shift the grid to match.
+	/// Negative until the first render, which is when the song's key first becomes visible.
+	int32_t appliedRootNote = -1;
 	/// Play single notes on an isomorphic grid instead of chords, for dropping into a lead line.
 	/// Deliberately shares KeyboardStateIsomorphic, so it is the same surface as the isomorphic layout.
 	bool leadMode = false;
