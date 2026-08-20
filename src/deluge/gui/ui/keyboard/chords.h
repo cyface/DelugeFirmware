@@ -25,9 +25,8 @@
 
 constexpr int8_t kMaxChordKeyboardSize = 7;
 constexpr int8_t kUniqueVoicings = 4;
-// Size of each built-in chord library
+// Size of the built-in chord library
 constexpr int8_t kDefaultLibraryChords = 33;
-constexpr int8_t kJazzLibraryChords = 24;
 // Most chords any library can hold, built-in or read from the card: eight pages of eight rows
 constexpr int8_t kUniqueChords = 64;
 constexpr int8_t kOffScreenChords = kUniqueChords - kDisplayHeight;
@@ -50,13 +49,11 @@ ChordQuality getChordQuality(NoteSet& notes);
 /// @brief Which set of chords the chord library keyboard offers. Selected by the ChordLibrary community feature.
 enum class ChordLibraryType : uint8_t {
 	DEFAULT = 0,
-	JAZZ = 1,
-	FILE = 2, ///< Read from CHORDS/<name>.XML on the card
+	FILE = 1, ///< Read from CHORDS/<name>.XML on the card
 };
 
-/// Names the built-in libraries answer to. Anything else selects a file in the CHORDS folder.
+/// Name the built-in library answers to. Anything else selects a file in the CHORDS folder.
 constexpr char const* kDefaultChordLibraryName = "Default";
-constexpr char const* kJazzChordLibraryName = "Jazz";
 
 // Interval offsets for convenience
 const int8_t NONE = INT8_MAX;
@@ -145,9 +142,8 @@ extern const Chord k7Sharp11;
 extern const Chord k7b13;
 extern const Chord k7Alt;
 
-/// The chord sets a ChordList can be loaded with
+/// The built-in chord set, and the fallback when a file cannot be read
 extern const std::array<const Chord, kDefaultLibraryChords> defaultChordLibrary;
-extern const std::array<const Chord, kJazzLibraryChords> jazzChordLibrary;
 
 extern const std::array<const Chord, 10> majorChords;
 
@@ -168,8 +164,8 @@ extern const std::array<const Chord, 10> otherChords;
 /// ChordList. `generation` bumps on every swap so ChordLists can tell their offsets have gone stale, even if a
 /// reload lands on the same set again.
 ///
-/// A library is selected by name: "Default" and "Jazz" are built in, anything else is CHORDS/<name>.XML on the
-/// card. The selected name is remembered in the community feature settings.
+/// A library is selected by name: "Default" is built in, anything else is CHORDS/<name>.XML on the card. The selected
+/// name is remembered in the community feature settings.
 class ChordLibrary {
 public:
 	ChordLibrary() = default;
@@ -177,7 +173,7 @@ public:
 	/// Select a library by name. A file that cannot be read falls back to the default set and remembers the
 	/// problem (see lastError()), so a typo in a file can never leave the keyboard without chords.
 	void select(char const* name);
-	/// Move to the next library: Default, Jazz, then the CHORDS folder in alphabetical order, wrapping round
+	/// Move to the next library: Default, then the CHORDS folder in alphabetical order, wrapping round
 	void selectNext();
 	/// Make the selection match the community feature setting, if it has changed since last time
 	void refreshFromSettings();
@@ -194,7 +190,7 @@ public:
 	const char* lastError() const { return lastError_[0] ? lastError_ : nullptr; }
 
 private:
-	void useBuiltIn(ChordLibraryType type);
+	void useBuiltIn();
 	bool useFile(char const* name);
 
 	// Starts on the built-in default so the table is never empty, even before the settings have been read

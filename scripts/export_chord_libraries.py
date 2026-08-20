@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the built-in chord libraries out as CHORDS/<name>.XML files.
+"""Write the built-in chord library out as CHORDS/Default.XML.
 
 Parses the Chord definitions in src/deluge/gui/ui/keyboard/chords.cpp so the files always match what the
 firmware ships, and emits the same format readChordLibraryFile() reads (see chord_library_file.h). The page
@@ -62,8 +62,8 @@ CANONICAL[20] = "MIN13"
 CANONICAL[21] = "MAJ13"
 CANONICAL[22] = "MIN14"
 
-PAGE_NAMES = {"jazzChordLibrary": ["Chart", "Extensions", "Altered"]}
-FILE_NAMES = {"defaultChordLibrary": "Default", "jazzChordLibrary": "Jazz"}
+PAGE_NAMES = {}
+FILE_NAMES = {"defaultChordLibrary": "Default"}
 
 
 def evaluate(expr):

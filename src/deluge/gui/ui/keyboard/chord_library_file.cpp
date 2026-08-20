@@ -193,9 +193,8 @@ bool isLibraryFile(const FILINFO& info, char* nameOut) {
 	}
 	memcpy(nameOut, fileName, length - 4);
 	nameOut[length - 4] = '\0';
-	// A file called Default or Jazz would be shadowed by the built-in set of that name, so leave it out of the
-	// cycle rather than have the cycle bounce between the two built-ins forever
-	return strcasecmp(nameOut, kDefaultChordLibraryName) != 0 && strcasecmp(nameOut, kJazzChordLibraryName) != 0;
+	// A file called Default would be shadowed by the built-in set of that name, so leave it out of the cycle
+	return strcasecmp(nameOut, kDefaultChordLibraryName) != 0;
 }
 
 } // namespace

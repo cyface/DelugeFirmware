@@ -146,14 +146,15 @@ int32_t KeyboardLayoutChordLibrary::buildDiatonicChord(int32_t x, int32_t shapeN
 }
 
 const char* KeyboardLayoutChordLibrary::nameForIntervals(NoteSet intervals) {
-	// Search both libraries, not just the active one - the jazz set names chords the default set has no
-	// symbol for and vice versa, and here we only want the label
+	// Search the built-in set and the active library - a file may name chords the default set has no symbol
+	// for and vice versa, and here we only want the label
 	for (const Chord& chord : defaultChordLibrary) {
 		if (chord.intervalSet.toBits() == intervals.toBits() && *chord.name) {
 			return chord.name;
 		}
 	}
-	for (const Chord& chord : jazzChordLibrary) {
+	for (int8_t i = 0; i < chordLibrary.chordCount(); i++) {
+		const Chord& chord = chordLibrary.chord(i);
 		if (chord.intervalSet.toBits() == intervals.toBits() && *chord.name) {
 			return chord.name;
 		}
@@ -402,7 +403,7 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 		}
 	}
 	else if (y == kControlRowLibrary) {
-		// Steps Default -> Jazz -> each file in CHORDS/ -> Default. The choice is a global setting rather than
+		// Steps Default -> each file in CHORDS/ -> Default. The choice is a global setting rather than
 		// per-clip state, and reaches the card on the next settings write, like a change made from the menu.
 		chordLibrary.selectNext();
 		state.chordList.refreshFromSettings();
@@ -616,15 +617,9 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	image[kControlRowScaleDegree][kControlColumn] = toggleColour(colours::darkblue, state.scaleDegreeColumns);
 	image[kControlRowDiatonic][kControlColumn] = toggleColour(colours::green, state.diatonicQuality);
 
-	// Default is dim, the built-in Jazz set is bright, and a library from the card gets its own colour
-	RGB libraryColour = colours::orange.forTail();
-	if (chordLibrary.library() == ChordLibraryType::JAZZ) {
-		libraryColour = colours::orange;
-	}
-	else if (chordLibrary.library() == ChordLibraryType::FILE) {
-		libraryColour = colours::yellow;
-	}
-	image[kControlRowLibrary][kControlColumn] = libraryColour;
+	// The built-in set is dim, a library from the card is bright
+	image[kControlRowLibrary][kControlColumn] =
+	    (chordLibrary.library() == ChordLibraryType::FILE) ? colours::yellow : colours::orange.forTail();
 
 	// Play group: brighter cyan is up, so the pair reads as a direction without a label
 	image[kControlRowOctaveUp][kControlColumn] = colours::cyan_full;

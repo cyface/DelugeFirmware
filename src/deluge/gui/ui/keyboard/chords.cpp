@@ -61,21 +61,10 @@ ChordLibrary chordLibrary{};
 // The one file-backed library. Lives in SDRAM: ~5 KB, only ever touched from the UI.
 PLACE_SDRAM_BSS static ChordLibraryData fileLibrary;
 
-const char* const kJazzPageNames[] = {"Chart", "Extensions", "Altered"};
-
-void ChordLibrary::useBuiltIn(ChordLibraryType type) {
-	switch (type) {
-	case ChordLibraryType::JAZZ:
-		chords_ = jazzChordLibrary.data();
-		chordCount_ = kJazzLibraryChords;
-		break;
-	default:
-		type = ChordLibraryType::DEFAULT;
-		chords_ = defaultChordLibrary.data();
-		chordCount_ = kDefaultLibraryChords;
-		break;
-	}
-	library_ = type;
+void ChordLibrary::useBuiltIn() {
+	chords_ = defaultChordLibrary.data();
+	chordCount_ = kDefaultLibraryChords;
+	library_ = ChordLibraryType::DEFAULT;
 	generation_++;
 }
 
@@ -95,15 +84,11 @@ void ChordLibrary::select(char const* name) {
 	lastError_[0] = '\0';
 	if (name == nullptr || *name == '\0' || strcasecmp(name, kDefaultChordLibraryName) == 0) {
 		name = kDefaultChordLibraryName;
-		useBuiltIn(ChordLibraryType::DEFAULT);
-	}
-	else if (strcasecmp(name, kJazzChordLibraryName) == 0) {
-		name = kJazzChordLibraryName;
-		useBuiltIn(ChordLibraryType::JAZZ);
+		useBuiltIn();
 	}
 	else if (!useFile(name)) {
 		// Keep the name the user asked for, so the setting is not silently rewritten, but play the default set
-		useBuiltIn(ChordLibraryType::DEFAULT);
+		useBuiltIn();
 	}
 	strncpy(name_, name, sizeof(name_) - 1);
 	name_[sizeof(name_) - 1] = '\0';
@@ -112,14 +97,9 @@ void ChordLibrary::select(char const* name) {
 void ChordLibrary::selectNext() {
 	char next[kMaxChordLibraryNameLength];
 	const char* chosen;
-	if (library_ == ChordLibraryType::DEFAULT && strcasecmp(name_, kDefaultChordLibraryName) == 0) {
-		chosen = kJazzChordLibraryName;
-	}
-	else {
-		// After Jazz the files start from the top; after a file (loaded or not) the next one up alphabetically
-		const char* after = (library_ == ChordLibraryType::JAZZ) ? "" : name_;
-		chosen = nextChordLibraryFile(after, next) ? next : kDefaultChordLibraryName;
-	}
+	// After Default the files start from the top; after a file (loaded or not) the next one up alphabetically
+	const char* after = (strcasecmp(name_, kDefaultChordLibraryName) == 0) ? "" : name_;
+	chosen = nextChordLibraryFile(after, next) ? next : kDefaultChordLibraryName;
 	runtimeFeatureSettings.setChordLibraryName(chosen);
 	select(chosen);
 }
@@ -138,14 +118,10 @@ const char* ChordLibrary::pageName(int32_t page) const {
 	if (page < 0) {
 		return nullptr;
 	}
-	switch (library_) {
-	case ChordLibraryType::JAZZ:
-		return (page < (int32_t)(sizeof(kJazzPageNames) / sizeof(kJazzPageNames[0]))) ? kJazzPageNames[page] : nullptr;
-	case ChordLibraryType::FILE:
-		return (page < kMaxLibraryPages) ? fileLibrary.pageNames[page] : nullptr;
-	default:
+	if (library_ != ChordLibraryType::FILE || page >= kMaxLibraryPages) {
 		return nullptr;
 	}
+	return fileLibrary.pageNames[page];
 }
 
 void ChordList::refreshFromSettings() {
@@ -433,40 +409,6 @@ PLACE_SDRAM_DATA const std::array<const Chord, kDefaultLibraryChords> defaultCho
     kEmptyChord, kMajor,  kMinor,  k6,      k2,   k69,      kSus2,    kSus4,   k7,         k7Sus4,      k7Sus2,
     kM7,         kMinor7, kMinor2, kMinor4, kDim, kFullDim, kAug,     kMinor6, kMinorMaj7, kMinor7b5,   kMinor9b5,
     kMinor7b5b9, k9,      kM9,     kMinor9, k11,  kM11,     kMinor11, k13,     kM13,       kM13Sharp11, kMinor13,
-};
-
-// Jazz library: a chord chart. Page one stacks the qualities a lead sheet actually calls for, so a standard is
-// played by walking the root columns and picking the row - e.g. Autumn Leaves is -7, 7, maj7, maj7, -7b5, 7b9, -
-// without leaving the page. Pages two and three hold the same idea with more colour: extensions, then altered
-// and suspended voicings. Rows run bottom to top.
-PLACE_SDRAM_DATA const std::array<const Chord, kJazzLibraryChords> jazzChordLibrary = {
-    // Chart: triads, the ii-V-I qualities in major and minor, and the diminished passing chord
-    kMajor,
-    kMinor,
-    k7,
-    kMinor7,
-    kM7,
-    kMinor7b5,
-    k7b9,
-    kFullDim,
-    // Extensions: sixths and the ninths, elevenths and thirteenth
-    k6,
-    k69,
-    kMinor6,
-    kMinor9,
-    k9,
-    kM9,
-    kMinor11,
-    k13,
-    // Altered: altered dominants, then the sharp-eleven, minor-major, augmented and suspended colours
-    k7Sharp9,
-    k7Sharp11,
-    k7b13,
-    k7Alt,
-    kM7Sharp11,
-    kMinorMaj7,
-    kAug,
-    k7Sus4,
 };
 
 PLACE_SDRAM_DATA const std::array<const Chord, 10> majorChords = {kMajor, kM7,  k6,    k2,    k69,

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <chordLibrary name="Jazz"
-	note="This is the built-in Jazz set, written out as a reference. The Deluge ignores a file with this name because the set is always built in - to make your own, copy it to a new name such as MyJazz.XML and edit that. See README.md for the format.">
+	note="A chord-chart style set: page one stacks the qualities a lead sheet calls for, from the bottom up, so a standard is played by walking the root columns. Edit freely - see README.md for the format.">
 	<page name="Chart">
 		<chord name="M">
 			<voicing notes="ROOT, MAJ3, P5" />
