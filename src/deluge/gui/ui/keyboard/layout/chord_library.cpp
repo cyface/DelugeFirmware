@@ -280,7 +280,8 @@ void KeyboardLayoutChordLibrary::popupOctave() {
 	char noteName[8] = {0};
 	char longText[32];
 	noteCodeToString(bottomNote(), noteName, nullptr, true);
-	sprintf(longText, "Octave: %s", noteName);
+	// Naming this "Octave" invited reading it as the key, which it is not - it is where the grid starts
+	sprintf(longText, "Bottom left: %s", noteName);
 
 	char const* shortLong[2] = {noteName, longText};
 	display->displayPopup(shortLong);
@@ -472,13 +473,19 @@ void KeyboardLayoutChordLibrary::precalculate() {
 	// This is a no-op unless the selection actually changed.
 	state.chordList.refreshFromSettings();
 
-	// On first render, offset by the root note. This can't be done in the constructor
-	// because at constructor time, root note changes from the default menu aren't seen yet
-	// or if the root note is changed in the song also isn't seen.
-	if (!initializedNoteOffset) {
-		initializedNoteOffset = true;
-		state.noteOffset += getRootNote();
+	// Line the grid up with the song's key. This can't be done in the constructor, because at constructor
+	// time root note changes from the default menu or the song aren't visible yet.
+	int32_t rootNote = getRootNote();
+	if (state.appliedRootNote < 0) {
+		state.noteOffset += rootNote;
 	}
+	else if (state.appliedRootNote != rootNote) {
+		// Follow later key changes too. Without this the grid stays stranded on the old tonic, so changing
+		// the key to A leaves the first column on C and anything reporting that column names the wrong note.
+		state.noteOffset += rootNote - state.appliedRootNote;
+	}
+	state.appliedRootNote = rootNote;
+	state.noteOffset = std::clamp<int32_t>(state.noteOffset, 0, kMaxBottomNote);
 
 	uint8_t hueStepSize = 192 / (kVerticalPages - 1); // 192 is the hue range for the rainbow
 	for (int32_t i = 0; i < pageColours.size(); ++i) {
