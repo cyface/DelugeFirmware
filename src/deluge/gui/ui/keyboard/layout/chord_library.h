@@ -27,6 +27,17 @@ namespace deluge::gui::ui::keyboard::layout {
 
 constexpr int8_t kVerticalPages = ((kUniqueChords + kDisplayHeight - 1) / kDisplayHeight); // Round up division
 
+/// The rightmost grid column is a control strip, so only the columns to its left play chords.
+constexpr int32_t kControlColumn = kDisplayWidth - 1;
+constexpr int32_t kChordLibraryColumns = kControlColumn;
+
+/// Control strip rows, as firmware row indices - row 0 is the BOTTOM of the display, matching the chord
+/// rows themselves. Rows 0..kVerticalPages-1 jump to that page; the rest are mode toggles.
+constexpr int32_t kControlRowScaleDegree = kVerticalPages;
+constexpr int32_t kControlRowDiatonic = kVerticalPages + 1;
+constexpr int32_t kControlRowLibrary = kVerticalPages + 2;
+static_assert(kControlRowLibrary < kDisplayHeight, "Control strip needs a row per page plus three toggles");
+
 /// @brief Represents a keyboard layout for chord-based input.
 class KeyboardLayoutChordLibrary : public ColumnControlsKeyboard {
 public:
@@ -50,10 +61,30 @@ protected:
 
 private:
 	void drawChordName(int16_t noteCode, const char* chordName = "", const char* voicingName = "");
-	inline uint8_t noteFromCoords(int32_t x) { return getState().chordLibrary.noteOffset + x; }
+
+	/// True when the scale-aware modes are actually in effect - they need a scale to work from
+	bool scaleModesActive() { return getScaleModeEnabled(); }
+	bool usingScaleDegrees() { return scaleModesActive() && getState().chordLibrary.scaleDegreeColumns; }
+	bool usingDiatonicQuality() { return scaleModesActive() && getState().chordLibrary.diatonicQuality; }
+
+	/// Root note under a grid column, either chromatic or stepping through the scale
+	uint8_t noteFromCoords(int32_t x);
+	/// Absolute note for a position counted in scale steps from the root note
+	int32_t noteFromDegreeIndex(int32_t degreeIndex);
+	/// Nearest scale-step position at or below a note, used to keep the two column modes in sync
+	int32_t degreeIndexFromNote(int32_t note);
+
+	/// Builds the diatonic chord for a shape rooted on a column, returning how many notes it wrote
+	int32_t buildDiatonicChord(int32_t x, int32_t shapeNo, int32_t notes[kMaxChordKeyboardSize]);
+	/// Name for a set of intervals, looked up across both libraries, or nullptr if nothing matches
+	const char* nameForIntervals(NoteSet intervals);
+
+	void handleControlPad(int32_t y);
+	void renderControlColumn(RGB image[][kDisplayWidth + kSideBarWidth]);
+	int32_t pageCount();
+
 	inline int32_t getChordNo(int32_t y) { return getState().chordLibrary.chordList.chordRowOffset + y; }
 
-	std::array<RGB, kOctaveSize> noteColours;
 	std::array<RGB, kVerticalPages> pageColours;
 	bool initializedNoteOffset = false;
 };

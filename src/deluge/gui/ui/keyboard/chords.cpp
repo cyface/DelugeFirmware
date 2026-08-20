@@ -378,34 +378,34 @@ PLACE_SDRAM_DATA const std::array<const Chord, kDefaultLibraryChords> defaultCho
     kMinor7b5b9, k9,      kM9,     kMinor9, k11,  kM11,     kMinor11, k13,     kM13,       kM13Sharp11, kMinor13,
 };
 
-// Jazz library: three screens of eight, grouped so a page of the pad grid is one chord family.
-// Page 1 minor, page 2 dominant, page 3 major plus the half-diminished/diminished pair.
+// Jazz library: three screens of eight, grouped by harmonic function rather than by chord family, so one
+// page covers one key. Within a page the order runs tonic, extensions, predominant, dominant.
 PLACE_SDRAM_DATA const std::array<const Chord, kJazzLibraryChords> jazzChordLibrary = {
-    // Minor
+    // Minor key: i and its extensions, then the ii-V that leads to it
     kMinor,
     kMinor7,
     kMinor9,
     kMinor11,
-    kMinor13,
     kMinor6,
-    kMinor69,
     kMinorMaj7,
-    // Dominant
-    k7,
-    k9,
-    k13,
+    kMinor7b5,
     k7b9,
-    k7Sharp9,
-    k7Sharp11,
-    k7b13,
-    k7Alt,
-    // Major, half-diminished and diminished
+    // Major key: I and its extensions, then the V
     kMajor,
     kM7,
     kM9,
     kM13,
     kM7Sharp11,
-    kMinor7b5,
+    k7,
+    k9,
+    k13,
+    // Colour and altered
+    k7Sharp9,
+    k7Sharp11,
+    k7b13,
+    k7Alt,
+    kMinor13,
+    kMinor69,
     kMinor9b5,
     kFullDim,
 };

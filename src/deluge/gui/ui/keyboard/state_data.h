@@ -53,6 +53,12 @@ struct KeyboardStateChordLibrary {
 	int32_t scrollOffset = 0;
 	int32_t noteOffset = (rowInterval * 4);
 	int32_t rowColorMultiplier = 5;
+	/// Columns step through the scale rather than chromatically. Only has an effect in scale mode.
+	bool scaleDegreeColumns = false;
+	/// Rows become chord functions built from the scale rather than fixed qualities. Only in scale mode.
+	bool diatonicQuality = false;
+	/// Scroll position for scaleDegreeColumns, counted in scale steps rather than semitones
+	int32_t degreeOffset = 0;
 	ChordList chordList{};
 };
 
