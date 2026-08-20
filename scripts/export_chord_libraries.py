@@ -134,9 +134,15 @@ def xml_escape(text):
 
 
 def write_library(path, name, chord_ids, chords, page_names):
+    note = (
+        f"This is the built-in {name} set, written out as a reference. The Deluge ignores a file with this "
+        f"name because the set is always built in - to make your own, copy it to a new name such as "
+        f"My{name}.XML and edit that. See README.md for the format."
+    )
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        f'<chordLibrary name="{xml_escape(name)}">',
+        f'<chordLibrary name="{xml_escape(name)}"',
+        f'\tnote="{xml_escape(note)}">',
     ]
     for page in range(0, len(chord_ids), 8):
         page_name = page_names[page // 8] if page // 8 < len(page_names) else None

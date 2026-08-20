@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chordLibrary name="Jazz">
+<chordLibrary name="Jazz"
+	note="This is the built-in Jazz set, written out as a reference. The Deluge ignores a file with this name because the set is always built in - to make your own, copy it to a new name such as MyJazz.XML and edit that. See README.md for the format.">
 	<page name="Minor">
 		<chord name="-">
 			<voicing notes="ROOT, MIN3, P5" />
