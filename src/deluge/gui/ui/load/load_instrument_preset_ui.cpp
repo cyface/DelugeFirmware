@@ -1078,12 +1078,21 @@ Error LoadInstrumentPresetUI::performLoadSynthToKit() {
 	// make sure the drum isn't currently in use
 	noteRow->stopCurrentlyPlayingNote(modelStackWithNoteRow);
 	kitToLoadFor->drumsWithRenderingActive.deleteAtKey((int32_t)(Drum*)soundDrumToReplace);
+	bool wasSelectedDrum = kitToLoadFor->selectedDrum == soundDrumToReplace;
 	kitToLoadFor->removeDrum(soundDrumToReplace);
 
 	// swaps out the drum pointed to by soundDrumToReplace
 	Error error = StorageManager::loadSynthToDrum(currentSong, instrumentClipToLoadFor, false, &soundDrumToReplace,
 	                                              &currentFileItem->filePointer, &enteredText, &currentDir);
 	if (error != Error::NONE) {
+		// The load failed, so the old drum is still what the note row points to - put it back
+		// in the kit rather than leaving it orphaned. removeDrum() didn't clear its list link,
+		// so do that before re-appending it.
+		soundDrumToReplace->next = nullptr;
+		kitToLoadFor->addDrum(soundDrumToReplace);
+		if (wasSelectedDrum) {
+			kitToLoadFor->selectedDrum = soundDrumToReplace;
+		}
 		return error;
 	}
 	// kitToLoadFor->addDrum(soundDrumToReplace);

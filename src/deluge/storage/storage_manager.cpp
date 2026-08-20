@@ -560,16 +560,18 @@ Error StorageManager::loadSynthToDrum(Song* song, InstrumentClip* clip, bool may
                                       SoundDrum** getInstrument, FilePointer* filePointer, String* name,
                                       String* dirPath) {
 	OutputType outputType = OutputType::SYNTH;
-	SoundDrum* newDrum = (SoundDrum*)createNewDrum(DrumType::SOUND);
-	if (!newDrum) {
-		return Error::INSUFFICIENT_RAM;
-	}
 
 	AudioEngine::logAction("loadSynthDrumFromFile");
 
 	Error error = openInstrumentFile(outputType, filePointer);
 	if (error != Error::NONE) {
 		return error;
+	}
+
+	SoundDrum* newDrum = (SoundDrum*)createNewDrum(DrumType::SOUND);
+	if (!newDrum) {
+		smDeserializer.closeWriter();
+		return Error::INSUFFICIENT_RAM;
 	}
 
 	AudioEngine::logAction("loadInstrumentFromFile");
@@ -581,6 +583,9 @@ Error StorageManager::loadSynthToDrum(Song* song, InstrumentClip* clip, bool may
 	// If that somehow didn't work...
 	if (error != Error::NONE || !fileSuccess) {
 
+		// readFromFile may have backed up a ParamManager keyed by this drum; if it stayed
+		// behind, the next allocation reusing this address would inherit it.
+		song->deleteBackedUpParamManagersForModControllable(newDrum);
 		void* toDealloc = static_cast<void*>(newDrum);
 		newDrum->~SoundDrum();
 		GeneralMemoryAllocator::get().dealloc(toDealloc);
