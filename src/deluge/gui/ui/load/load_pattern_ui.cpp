@@ -304,7 +304,7 @@ Error LoadPatternUI::performLoad() {
 	                                              noScaling, previewOnly, selectedDrumOnly);
 
 	if (error != Error::NONE) {
-		display->displayError(currentLabelLoadError);
+		display->displayError(error);
 		return error;
 	}
 
