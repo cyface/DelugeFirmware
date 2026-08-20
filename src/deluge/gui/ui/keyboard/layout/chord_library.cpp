@@ -98,6 +98,37 @@ int32_t KeyboardLayoutChordLibrary::degreeIndexFromNote(int32_t note) {
 	return octave * scaleNoteCount + degree;
 }
 
+uint8_t KeyboardLayoutChordLibrary::noteFromLeadCoords(int32_t x, int32_t y) {
+	// Deliberately the isomorphic layout's own state, so lead mode inherits its scroll and row interval
+	KeyboardStateIsomorphic& iso = getState().isomorphic;
+	return std::clamp<int32_t>(iso.scrollOffset + x + y * iso.rowInterval, 0, 127);
+}
+
+int32_t KeyboardLayoutChordLibrary::bottomNote() {
+	if (usingLeadMode()) {
+		return noteFromLeadCoords(0, 0);
+	}
+	return noteFromCoords(0);
+}
+
+void KeyboardLayoutChordLibrary::shiftOctave(int32_t direction) {
+	KeyboardStateChordLibrary& state = getState().chordLibrary;
+
+	if (usingLeadMode()) {
+		KeyboardStateIsomorphic& iso = getState().isomorphic;
+		iso.scrollOffset = std::clamp<int32_t>(iso.scrollOffset + direction * kOctaveSize, 0, kMaxBottomNote);
+	}
+	else if (usingScaleDegrees()) {
+		// An octave is a whole scale's worth of steps, however many notes that scale has
+		int32_t scaleNoteCount = std::max<int32_t>(1, getScaleNoteCount());
+		state.degreeOffset =
+		    std::clamp<int32_t>(state.degreeOffset + direction * scaleNoteCount, 0, scaleNoteCount * 8);
+	}
+	else {
+		state.noteOffset = std::clamp<int32_t>(state.noteOffset + direction * kOctaveSize, 0, kMaxBottomNote);
+	}
+}
+
 uint8_t KeyboardLayoutChordLibrary::noteFromCoords(int32_t x) {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 	if (usingScaleDegrees()) {
@@ -147,27 +178,36 @@ int32_t KeyboardLayoutChordLibrary::pageCount() {
 void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboardPadPresses]) {
 	currentNotesState = NotesState{}; // Erase active notes
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
-	int8_t heldControlPad = -1;
+	int8_t heldX = -1;
+	int8_t heldY = -1;
 
 	// We run through the presses in reverse order to display the most recent pressed chord on top
 	for (int32_t idxPress = kMaxNumKeyboardPadPresses - 1; idxPress >= 0; --idxPress) {
 
 		PressedPad pressed = presses[idxPress];
 
-		if (pressed.x == kControlColumn) {
+		if (pressed.x == kControlColumn || pressed.x == kPageColumn) {
 			if (pressed.active) {
 				// Holding a control pad names it, so it can be identified without committing to it
-				heldControlPad = pressed.y;
+				heldX = pressed.x;
+				heldY = pressed.y;
 			}
 			// Act on the release, which is delivered exactly once. evaluatePads() replays every held pad on
 			// each pad and encoder event, so a toggle driven from the press would fire over and over.
 			else if (!pressed.dead) {
-				handleControlPad(pressed.y);
+				handleControlPad(pressed.x, pressed.y);
 			}
 			continue;
 		}
 
 		if (!pressed.active || pressed.x >= kChordLibraryColumns) {
+			continue;
+		}
+
+		if (usingLeadMode()) {
+			uint8_t note = noteFromLeadCoords(pressed.x, pressed.y);
+			drawChordName(note);
+			enableNote(note, velocity);
 			continue;
 		}
 
@@ -208,10 +248,11 @@ void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboard
 	}
 
 	// Only on the way down - a release has already put its own confirmation on the display
-	if (heldControlPad != lastDescribedControlPad) {
-		lastDescribedControlPad = heldControlPad;
-		if (heldControlPad >= 0) {
-			popupControlState(heldControlPad);
+	if (heldX != lastDescribedX || heldY != lastDescribedY) {
+		lastDescribedX = heldX;
+		lastDescribedY = heldY;
+		if (heldX >= 0) {
+			popupControlState(heldX, heldY);
 		}
 	}
 
@@ -235,10 +276,23 @@ void KeyboardLayoutChordLibrary::popupPage(int32_t page) {
 	display->displayPopup(shortLong);
 }
 
-void KeyboardLayoutChordLibrary::popupControlState(int32_t y) {
+void KeyboardLayoutChordLibrary::popupOctave() {
+	char noteName[8] = {0};
+	char longText[32];
+	noteCodeToString(bottomNote(), noteName, nullptr, true);
+	sprintf(longText, "Octave: %s", noteName);
+
+	char const* shortLong[2] = {noteName, longText};
+	display->displayPopup(shortLong);
+}
+
+void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
-	if (y < kVerticalPages) {
+	if (x == kPageColumn) {
+		if (y >= kVerticalPages) {
+			return;
+		}
 		if (usingDiatonicQuality()) {
 			char const* text[2] = {"DIAT", "Diatonic: no pages"};
 			display->displayPopup(text);
@@ -254,6 +308,18 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t y) {
 		else {
 			popupPage(y);
 		}
+		return;
+	}
+
+	if (y == kControlRowLead) {
+		char const* lead[2] = {"LEAD", "Playing: lead"};
+		char const* chords[2] = {"CHRD", "Playing: chords"};
+		display->displayPopup(state.leadMode ? lead : chords);
+		return;
+	}
+
+	if (y == kControlRowOctaveDown || y == kControlRowOctaveUp) {
+		popupOctave();
 		return;
 	}
 
@@ -285,15 +351,27 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t y) {
 	}
 }
 
-void KeyboardLayoutChordLibrary::handleControlPad(int32_t y) {
+void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
-	if (y < kVerticalPages) {
+	if (x == kPageColumn) {
+		if (y >= kVerticalPages) {
+			return;
+		}
 		// Diatonic mode has one fixed screen of shapes, so there are no pages to jump between
 		if (!usingDiatonicQuality() && y < pageCount()) {
 			int32_t maxRowOffset = std::max<int32_t>(0, state.chordList.chordCount - kDisplayHeight);
 			state.chordList.chordRowOffset = std::min<int32_t>(y * kDisplayHeight, maxRowOffset);
 		}
+	}
+	else if (y == kControlRowLead) {
+		state.leadMode = !state.leadMode;
+	}
+	else if (y == kControlRowOctaveDown) {
+		shiftOctave(-1);
+	}
+	else if (y == kControlRowOctaveUp) {
+		shiftOctave(1);
 	}
 	else if (y == kControlRowScaleDegree) {
 		if (scaleModesActive()) {
@@ -322,9 +400,12 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t y) {
 		                                : RuntimeFeatureStateChordLibrary::JazzChords);
 		state.chordList.refreshFromSettings();
 	}
+	else {
+		return; // A blank pad in the gap between the two groups
+	}
 
 	// Same report either way: held it describes the pad, released it confirms what the pad just did
-	popupControlState(y);
+	popupControlState(x, y);
 	precalculate();
 	keyboardScreen.requestRendering();
 }
@@ -334,6 +415,13 @@ void KeyboardLayoutChordLibrary::handleVerticalEncoder(int32_t offset) {
 		return;
 	}
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
+
+	if (usingLeadMode()) {
+		KeyboardStateIsomorphic& iso = getState().isomorphic;
+		iso.scrollOffset = std::clamp<int32_t>(iso.scrollOffset + offset * iso.rowInterval, 0, kMaxBottomNote);
+		precalculate();
+		return;
+	}
 
 	// Diatonic mode shows one fixed screen of shapes, so there is nothing to scroll through
 	if (usingDiatonicQuality()) {
@@ -363,6 +451,10 @@ void KeyboardLayoutChordLibrary::handleHorizontalEncoder(int32_t offset, bool sh
 				state.chordList.adjustVoicingOffset(chordNo, offset);
 			}
 		}
+	}
+	else if (usingLeadMode()) {
+		KeyboardStateIsomorphic& iso = getState().isomorphic;
+		iso.scrollOffset = std::clamp<int32_t>(iso.scrollOffset + offset, 0, kMaxBottomNote);
 	}
 	else if (usingScaleDegrees()) {
 		state.degreeOffset += offset;
@@ -408,6 +500,29 @@ void KeyboardLayoutChordLibrary::renderPads(RGB image[][kDisplayWidth + kSideBar
 	}
 
 	bool diatonic = usingDiatonicQuality();
+
+	// Lead mode replaces the chord grid with single notes, but keeps the control strips so there is a way back
+	if (usingLeadMode()) {
+		for (int32_t x = 0; x < kChordLibraryColumns; x++) {
+			for (int32_t y = 0; y < kDisplayHeight; ++y) {
+				int32_t noteCode = noteFromLeadCoords(x, y);
+				uint16_t noteWithinOctave = (uint16_t)((noteCode + kOctaveSize) - getRootNote()) % kOctaveSize;
+				RGB colour = getNoteColour((noteCode % state.rowInterval) * state.rowColorMultiplier);
+
+				if (noteWithinOctave == 0) {
+					image[y][x] = colour;
+				}
+				else if (!inScaleMode || octaveScaleNotes.has(noteWithinOctave)) {
+					image[y][x] = colour.dim(2);
+				}
+				else {
+					image[y][x] = colour.dim(5);
+				}
+			}
+		}
+		renderControlColumn(image);
+		return;
+	}
 
 	// Iterate over grid image
 	for (int32_t x = 0; x < kChordLibraryColumns; x++) {
@@ -461,14 +576,19 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	int32_t pages = pageCount();
 	int32_t currentPage = state.chordList.chordRowOffset / kDisplayHeight;
 
-	// Page jump pads run bottom-up, matching the chord rows themselves - chord 0 sits on the bottom row
-	for (int32_t y = 0; y < kVerticalPages; ++y) {
-		if (diatonic || y >= pages) {
-			image[y][kControlColumn] = colours::black;
+	// Page pads run bottom-up, matching the chord rows themselves - chord 0 sits on the bottom row
+	for (int32_t y = 0; y < kDisplayHeight; ++y) {
+		if (y >= kVerticalPages || diatonic || y >= pages) {
+			image[y][kPageColumn] = colours::black;
 		}
 		else {
-			image[y][kControlColumn] = (y == currentPage) ? pageColours[y] : pageColours[y].forTail();
+			image[y][kPageColumn] = (y == currentPage) ? pageColours[y] : pageColours[y].forTail();
 		}
+	}
+
+	// Blank the whole control column first, so the gap between the mode and play groups stays clean
+	for (int32_t y = 0; y < kDisplayHeight; ++y) {
+		image[y][kControlColumn] = colours::black;
 	}
 
 	// The scale-aware modes have nothing to work from without a scale, so show them as inert
@@ -486,6 +606,11 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	bool jazz = runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary)
 	            == RuntimeFeatureStateChordLibrary::JazzChords;
 	image[kControlRowLibrary][kControlColumn] = jazz ? colours::orange : colours::orange.forTail();
+
+	// Play group: brighter cyan is up, so the pair reads as a direction without a label
+	image[kControlRowOctaveUp][kControlColumn] = colours::cyan_full;
+	image[kControlRowOctaveDown][kControlColumn] = colours::cyan;
+	image[kControlRowLead][kControlColumn] = state.leadMode ? colours::pink : colours::pink.forTail();
 }
 
 void KeyboardLayoutChordLibrary::drawChordName(int16_t noteCode, const char* chordName, const char* voicingName) {
