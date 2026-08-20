@@ -125,24 +125,6 @@ static void SetupGridUnarmedClipBrightnessSetting(RuntimeFeatureSetting& setting
 	};
 }
 
-static void SetupChordLibrarySetting(RuntimeFeatureSetting& setting, deluge::l10n::String displayName,
-                                     std::string_view xmlName, RuntimeFeatureStateChordLibrary def) {
-	setting.displayName = displayName;
-	setting.xmlName = xmlName;
-	setting.value = static_cast<uint32_t>(def);
-
-	setting.options = {
-	    {
-	        .displayName = display->haveOLED() ? "Default" : "DFLT",
-	        .value = RuntimeFeatureStateChordLibrary::DefaultChords,
-	    },
-	    {
-	        .displayName = display->haveOLED() ? "Jazz" : "JAZZ",
-	        .value = RuntimeFeatureStateChordLibrary::JazzChords,
-	    },
-	};
-}
-
 void RuntimeFeatureSettings::init() {
 	using enum deluge::l10n::String;
 	// Drum randomizer
@@ -260,10 +242,6 @@ void RuntimeFeatureSettings::init() {
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::DrumVelocityLayers],
 	                  STRING_FOR_COMMUNITY_FEATURE_DRUM_VELOCITY_LAYERS, "drumVelocityLayers",
 	                  RuntimeFeatureStateToggle::Off);
-	// Chord set offered by the chord library keyboard layout
-	SetupChordLibrarySetting(settings[RuntimeFeatureSettingType::ChordLibrary],
-	                         STRING_FOR_COMMUNITY_FEATURE_CHORD_LIBRARY, "chordLibrary",
-	                         RuntimeFeatureStateChordLibrary::DefaultChords);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {
@@ -314,6 +292,9 @@ void RuntimeFeatureSettings::readSettingsFromFile() {
 
 		if (strcmp(currentTag, "startupSong") == 0) {
 			reader.readTagOrAttributeValueString(&startupSong);
+		}
+		if (strcmp(currentTag, "chordLibrary") == 0) {
+			reader.readTagOrAttributeValueString(&chordLibraryName);
 		}
 		if (strcmp(currentTag, TAG_RUNTIME_FEATURE_SETTING) == 0) {
 			// Read name
@@ -373,6 +354,9 @@ void RuntimeFeatureSettings::writeSettingsToFile() {
 	writer.writeFirmwareVersion();
 	writer.writeEarliestCompatibleFirmwareVersion("4.1.3");
 	writer.writeAttribute("startupSong", currentSong->getSongFullPath().get());
+	if (!chordLibraryName.isEmpty()) {
+		writer.writeAttribute("chordLibrary", chordLibraryName.get());
+	}
 	writer.writeOpeningTagEnd();
 
 	for (auto& setting : settings) {

@@ -27,8 +27,11 @@
 #include "hid/display/display.h"
 #include "io/debug/log.h"
 #include "model/settings/runtime_feature_settings.h"
+#include "printf.h"
 #include "util/functions.h"
+#include <cctype>
 #include <cmath>
+#include <cstring>
 #include <stdlib.h>
 
 namespace deluge::gui::ui::keyboard::layout {
@@ -54,18 +57,6 @@ const std::array<DiatonicShape, kDisplayHeight> diatonicShapes = {{
 
 // The jazz library is grouped so each page is one harmonic area. The default library has no such theme,
 // so its pages are only ever numbered.
-const char* const kJazzPageNames[] = {"Minor", "Major", "Altered"};
-
-static const char* pageLabel(ChordLibraryType library, int32_t page) {
-	if (library != ChordLibraryType::JAZZ) {
-		return nullptr;
-	}
-	if (page < 0 || page >= (int32_t)(sizeof(kJazzPageNames) / sizeof(kJazzPageNames[0]))) {
-		return nullptr;
-	}
-	return kJazzPageNames[page];
-}
-
 int32_t KeyboardLayoutChordLibrary::noteFromDegreeIndex(int32_t degreeIndex) {
 	NoteSet& scaleNotes = getScaleNotes();
 	int32_t scaleNoteCount = getScaleNoteCount();
@@ -264,7 +255,7 @@ void KeyboardLayoutChordLibrary::popupPage(int32_t page) {
 	char longText[32];
 	sprintf(shortText, "PG%d", (int)page + 1);
 
-	const char* label = pageLabel(getState().chordLibrary.chordList.library(), page);
+	const char* label = chordLibrary.pageName(page);
 	if (label) {
 		sprintf(longText, "Page %d - %s", (int)page + 1, label);
 	}
@@ -272,6 +263,29 @@ void KeyboardLayoutChordLibrary::popupPage(int32_t page) {
 		sprintf(longText, "Page %d", (int)page + 1);
 	}
 
+	char const* shortLong[2] = {shortText, longText};
+	display->displayPopup(shortLong);
+}
+
+void KeyboardLayoutChordLibrary::popupLibraryName() {
+	const char* name = chordLibrary.name();
+	char shortText[5];
+	for (int32_t i = 0; i < 4; i++) {
+		shortText[i] = name[i] ? toupper(name[i]) : '\0';
+		if (!name[i]) {
+			break;
+		}
+	}
+	shortText[4] = '\0';
+	char longText[80];
+	if (chordLibrary.lastError() != nullptr) {
+		// The file could not be used, so say why rather than pretend it is playing
+		snprintf(longText, sizeof(longText), "%s: %s", name, chordLibrary.lastError());
+		strcpy(shortText, "ERR");
+	}
+	else {
+		snprintf(longText, sizeof(longText), "Set: %s", name);
+	}
 	char const* shortLong[2] = {shortText, longText};
 	display->displayPopup(shortLong);
 }
@@ -344,11 +358,7 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 	}
 
 	if (y == kControlRowLibrary) {
-		bool jazz = runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary)
-		            == RuntimeFeatureStateChordLibrary::JazzChords;
-		char const* jazzText[2] = {"JAZZ", "Set: Jazz"};
-		char const* defaultText[2] = {"DFLT", "Set: Default"};
-		display->displayPopup(jazz ? jazzText : defaultText);
+		popupLibraryName();
 	}
 }
 
@@ -392,13 +402,9 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 		}
 	}
 	else if (y == kControlRowLibrary) {
-		bool jazz = runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary)
-		            == RuntimeFeatureStateChordLibrary::JazzChords;
-		// Drive the global setting rather than adding per-clip state, so the menu and this pad stay in step.
-		// It reaches the card on the next settings write, the same as a change made from the menu.
-		runtimeFeatureSettings.set(RuntimeFeatureSettingType::ChordLibrary,
-		                           jazz ? RuntimeFeatureStateChordLibrary::DefaultChords
-		                                : RuntimeFeatureStateChordLibrary::JazzChords);
+		// Steps Default -> Jazz -> each file in CHORDS/ -> Default. The choice is a global setting rather than
+		// per-clip state, and reaches the card on the next settings write, like a change made from the menu.
+		chordLibrary.selectNext();
 		state.chordList.refreshFromSettings();
 	}
 	else {
@@ -610,9 +616,15 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	image[kControlRowScaleDegree][kControlColumn] = toggleColour(colours::darkblue, state.scaleDegreeColumns);
 	image[kControlRowDiatonic][kControlColumn] = toggleColour(colours::green, state.diatonicQuality);
 
-	bool jazz = runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary)
-	            == RuntimeFeatureStateChordLibrary::JazzChords;
-	image[kControlRowLibrary][kControlColumn] = jazz ? colours::orange : colours::orange.forTail();
+	// Default is dim, the built-in Jazz set is bright, and a library from the card gets its own colour
+	RGB libraryColour = colours::orange.forTail();
+	if (chordLibrary.library() == ChordLibraryType::JAZZ) {
+		libraryColour = colours::orange;
+	}
+	else if (chordLibrary.library() == ChordLibraryType::FILE) {
+		libraryColour = colours::yellow;
+	}
+	image[kControlRowLibrary][kControlColumn] = libraryColour;
 
 	// Play group: brighter cyan is up, so the pair reads as a direction without a label
 	image[kControlRowOctaveUp][kControlColumn] = colours::cyan_full;

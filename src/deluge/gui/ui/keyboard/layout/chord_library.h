@@ -101,6 +101,7 @@ private:
 	void popupControlState(int32_t x, int32_t y);
 	void popupPage(int32_t page);
 	void popupOctave();
+	void popupLibraryName();
 	void renderControlColumn(RGB image[][kDisplayWidth + kSideBarWidth]);
 	int32_t pageCount();
 
