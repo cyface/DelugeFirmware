@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<chordLibrary name="Default">
+<chordLibrary name="Default"
+	note="This is the built-in Default set, written out as a reference. The Deluge ignores a file with this name because the set is always built in - to make your own, copy it to a new name such as MyDefault.XML and edit that. See README.md for the format.">
 	<page>
 		<chord name="">
 		</chord>
