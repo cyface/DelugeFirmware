@@ -226,6 +226,12 @@ void TaskManager::blockTask(TaskID id) {
 }
 
 void TaskManager::runTask(TaskID id) {
+	// runTask can be entered while another task's handler is still on the stack - both from yield()'s
+	// inner loop and directly (AudioEngine::runRoutine() dispatches the audio task this way during SD
+	// waits). Restore the caller's currentID on the way out, otherwise a later yield() in the outer
+	// task attributes its bookkeeping - including the WAITING_TO_END parking that stops a
+	// removeAfterUse task being picked again mid-run - to whichever task happened to run last.
+	TaskID callerID = currentID;
 	countThisTask = true;
 	currentID = id;
 	auto* current_task = &list[currentID];
@@ -262,6 +268,7 @@ void TaskManager::runTask(TaskID id) {
 		}
 		lastFinishTime = timeNow;
 	}
+	currentID = callerID;
 }
 
 void TaskManager::runHighestPriTask() {

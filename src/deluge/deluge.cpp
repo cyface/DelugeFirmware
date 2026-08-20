@@ -410,13 +410,15 @@ void setupBlankSong() {
 }
 
 namespace {
-/// setupStartupSong() is registered as a conditional "once" task, but the scheduler only drops a task
-/// from its list *after* the handler returns - and loading a song yields back to the scheduler (see
-/// LoadSongUI::performLoad). So the scheduler is free to pick this same task again while the first
-/// call is still inside the load. The nested call then finds the fail-safe canary that the first call
-/// had only just written and reports a bogus "Startup fault F1", while the first call goes on to load
-/// the song and unlink the canary - leaving the fault on screen every boot with nothing on the card to
-/// explain it.
+/// setupStartupSong() is registered as a conditional "once" task, and loading a song yields back to
+/// the scheduler (see LoadSongUI::performLoad). yield() parks a removeAfterUse task as WAITING_TO_END
+/// so it can't be picked again mid-run, but that parking keys off TaskManager::currentID - which a
+/// nested runTask() call (AudioEngine::runRoutine() dispatches the audio task that way during SD
+/// waits) used to leave pointing at the wrong task, so this task stayed READY and got entered a
+/// second time. The nested call then found the fail-safe canary the first call had only just written
+/// and reported a bogus "Startup fault F1" on every boot. runTask() now restores the caller's
+/// currentID, which fixes the whole class; this guard stays as cheap defense-in-depth, since a second
+/// entry here misfires the canary check rather than just wasting time.
 bool startupSongSetupRunning = false;
 
 struct StartupSongReentryGuard {
