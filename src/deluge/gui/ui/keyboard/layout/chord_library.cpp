@@ -52,6 +52,20 @@ const std::array<DiatonicShape, kDisplayHeight> diatonicShapes = {{
     {"SHELL", {0, 2, 6, NONE, NONE, NONE, NONE}},
 }};
 
+// The jazz library is grouped so each page is one harmonic area. The default library has no such theme,
+// so its pages are only ever numbered.
+const char* const kJazzPageNames[] = {"Minor", "Major", "Altered"};
+
+static const char* pageLabel(ChordLibraryType library, int32_t page) {
+	if (library != ChordLibraryType::JAZZ) {
+		return nullptr;
+	}
+	if (page < 0 || page >= (int32_t)(sizeof(kJazzPageNames) / sizeof(kJazzPageNames[0]))) {
+		return nullptr;
+	}
+	return kJazzPageNames[page];
+}
+
 int32_t KeyboardLayoutChordLibrary::noteFromDegreeIndex(int32_t degreeIndex) {
 	NoteSet& scaleNotes = getScaleNotes();
 	int32_t scaleNoteCount = getScaleNoteCount();
@@ -133,6 +147,7 @@ int32_t KeyboardLayoutChordLibrary::pageCount() {
 void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboardPadPresses]) {
 	currentNotesState = NotesState{}; // Erase active notes
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
+	int8_t heldControlPad = -1;
 
 	// We run through the presses in reverse order to display the most recent pressed chord on top
 	for (int32_t idxPress = kMaxNumKeyboardPadPresses - 1; idxPress >= 0; --idxPress) {
@@ -140,9 +155,13 @@ void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboard
 		PressedPad pressed = presses[idxPress];
 
 		if (pressed.x == kControlColumn) {
+			if (pressed.active) {
+				// Holding a control pad names it, so it can be identified without committing to it
+				heldControlPad = pressed.y;
+			}
 			// Act on the release, which is delivered exactly once. evaluatePads() replays every held pad on
 			// each pad and encoder event, so a toggle driven from the press would fire over and over.
-			if (!pressed.active && !pressed.dead) {
+			else if (!pressed.dead) {
 				handleControlPad(pressed.y);
 			}
 			continue;
@@ -187,7 +206,83 @@ void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboard
 			enableNote(noteFromCoords(pressed.x) + offset, velocity);
 		}
 	}
+
+	// Only on the way down - a release has already put its own confirmation on the display
+	if (heldControlPad != lastDescribedControlPad) {
+		lastDescribedControlPad = heldControlPad;
+		if (heldControlPad >= 0) {
+			popupControlState(heldControlPad);
+		}
+	}
+
 	ColumnControlsKeyboard::evaluatePads(presses);
+}
+
+void KeyboardLayoutChordLibrary::popupPage(int32_t page) {
+	char shortText[8];
+	char longText[32];
+	sprintf(shortText, "PG%d", (int)page + 1);
+
+	const char* label = pageLabel(getState().chordLibrary.chordList.library, page);
+	if (label) {
+		sprintf(longText, "Page %d - %s", (int)page + 1, label);
+	}
+	else {
+		sprintf(longText, "Page %d", (int)page + 1);
+	}
+
+	char const* shortLong[2] = {shortText, longText};
+	display->displayPopup(shortLong);
+}
+
+void KeyboardLayoutChordLibrary::popupControlState(int32_t y) {
+	KeyboardStateChordLibrary& state = getState().chordLibrary;
+
+	if (y < kVerticalPages) {
+		if (usingDiatonicQuality()) {
+			char const* text[2] = {"DIAT", "Diatonic: no pages"};
+			display->displayPopup(text);
+		}
+		else if (y >= pageCount()) {
+			char shortText[8];
+			char longText[32];
+			sprintf(shortText, "PG%d", (int)y + 1);
+			sprintf(longText, "No page %d", (int)y + 1);
+			char const* shortLong[2] = {shortText, longText};
+			display->displayPopup(shortLong);
+		}
+		else {
+			popupPage(y);
+		}
+		return;
+	}
+
+	if (y == kControlRowScaleDegree || y == kControlRowDiatonic) {
+		if (!scaleModesActive()) {
+			char const* text[2] = {"SCAL", "Needs scale mode"};
+			display->displayPopup(text);
+			return;
+		}
+		if (y == kControlRowScaleDegree) {
+			char const* on[2] = {"DEGR", "Columns: scale degree"};
+			char const* off[2] = {"CHRM", "Columns: chromatic"};
+			display->displayPopup(state.scaleDegreeColumns ? on : off);
+		}
+		else {
+			char const* on[2] = {"DIAT", "Rows: diatonic"};
+			char const* off[2] = {"LIB", "Rows: chord library"};
+			display->displayPopup(state.diatonicQuality ? on : off);
+		}
+		return;
+	}
+
+	if (y == kControlRowLibrary) {
+		bool jazz = runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary)
+		            == RuntimeFeatureStateChordLibrary::JazzChords;
+		char const* jazzText[2] = {"JAZZ", "Set: Jazz"};
+		char const* defaultText[2] = {"DFLT", "Set: Default"};
+		display->displayPopup(jazz ? jazzText : defaultText);
+	}
 }
 
 void KeyboardLayoutChordLibrary::handleControlPad(int32_t y) {
@@ -195,19 +290,13 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t y) {
 
 	if (y < kVerticalPages) {
 		// Diatonic mode has one fixed screen of shapes, so there are no pages to jump between
-		if (usingDiatonicQuality() || y >= pageCount()) {
-			return;
+		if (!usingDiatonicQuality() && y < pageCount()) {
+			int32_t maxRowOffset = std::max<int32_t>(0, state.chordList.chordCount - kDisplayHeight);
+			state.chordList.chordRowOffset = std::min<int32_t>(y * kDisplayHeight, maxRowOffset);
 		}
-		int32_t maxRowOffset = std::max<int32_t>(0, state.chordList.chordCount - kDisplayHeight);
-		state.chordList.chordRowOffset = std::min<int32_t>(y * kDisplayHeight, maxRowOffset);
 	}
-	else if (y == kControlRowScaleDegree || y == kControlRowDiatonic) {
-		if (!scaleModesActive()) {
-			char const* shortLong[2] = {"SCAL", "Needs scale mode"};
-			display->displayPopup(shortLong);
-			return;
-		}
-		if (y == kControlRowScaleDegree) {
+	else if (y == kControlRowScaleDegree) {
+		if (scaleModesActive()) {
 			// Keep both column modes pointing at roughly the same note so toggling doesn't jump the keyboard
 			if (state.scaleDegreeColumns) {
 				state.noteOffset = noteFromDegreeIndex(state.degreeOffset);
@@ -216,15 +305,11 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t y) {
 				state.degreeOffset = degreeIndexFromNote(state.noteOffset);
 			}
 			state.scaleDegreeColumns = !state.scaleDegreeColumns;
-			char const* shortLong[2] = {"DEGR", "Scale degree columns"};
-			char const* offLong[2] = {"CHRM", "Chromatic columns"};
-			display->displayPopup(state.scaleDegreeColumns ? shortLong : offLong);
 		}
-		else {
+	}
+	else if (y == kControlRowDiatonic) {
+		if (scaleModesActive()) {
 			state.diatonicQuality = !state.diatonicQuality;
-			char const* onLong[2] = {"DIAT", "Diatonic chords"};
-			char const* offLong[2] = {"LIB", "Chord library"};
-			display->displayPopup(state.diatonicQuality ? onLong : offLong);
 		}
 	}
 	else if (y == kControlRowLibrary) {
@@ -236,11 +321,10 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t y) {
 		                           jazz ? RuntimeFeatureStateChordLibrary::DefaultChords
 		                                : RuntimeFeatureStateChordLibrary::JazzChords);
 		state.chordList.refreshFromSettings();
-		char const* jazzLong[2] = {"JAZZ", "Jazz library"};
-		char const* defaultLong[2] = {"DFLT", "Default library"};
-		display->displayPopup(jazz ? defaultLong : jazzLong);
 	}
 
+	// Same report either way: held it describes the pad, released it confirms what the pad just did
+	popupControlState(y);
 	precalculate();
 	keyboardScreen.requestRendering();
 }
