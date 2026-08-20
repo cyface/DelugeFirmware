@@ -25,11 +25,11 @@
 
 constexpr int8_t kMaxChordKeyboardSize = 7;
 constexpr int8_t kUniqueVoicings = 4;
-// Size of each selectable chord library. kUniqueChords is the storage capacity of a ChordList, so it has to
-// stay at least as large as the biggest library.
+// Size of each built-in chord library
 constexpr int8_t kDefaultLibraryChords = 33;
 constexpr int8_t kJazzLibraryChords = 24;
-constexpr int8_t kUniqueChords = kDefaultLibraryChords;
+// Most chords any library can hold, built-in or read from the card: eight pages of eight rows
+constexpr int8_t kUniqueChords = 64;
 constexpr int8_t kOffScreenChords = kUniqueChords - kDisplayHeight;
 
 namespace deluge::gui::ui::keyboard {
@@ -51,7 +51,12 @@ ChordQuality getChordQuality(NoteSet& notes);
 enum class ChordLibraryType : uint8_t {
 	DEFAULT = 0,
 	JAZZ = 1,
+	FILE = 2, ///< Read from CHORDS/<name>.XML on the card
 };
+
+/// Names the built-in libraries answer to. Anything else selects a file in the CHORDS folder.
+constexpr char const* kDefaultChordLibraryName = "Default";
+constexpr char const* kJazzChordLibraryName = "Jazz";
 
 // Interval offsets for convenience
 const int8_t NONE = INT8_MAX;
@@ -159,29 +164,46 @@ extern const std::array<const Chord, 10> otherChords;
 /// @brief The chord table every clip's chord library keyboard reads from.
 ///
 /// There is exactly one of these (`chordLibrary`), shared by every clip. It only points at the active chord set,
-/// so switching sets is a pointer swap and costs no RAM per clip - the per-clip state (scroll position, chosen
-/// voicings) lives in ChordList. `generation` bumps on every swap so ChordLists can tell their offsets have gone
-/// stale, even if a future reload lands on the same ChordLibraryType again.
+/// so switching sets costs no RAM per clip - the per-clip state (scroll position, chosen voicings) lives in
+/// ChordList. `generation` bumps on every swap so ChordLists can tell their offsets have gone stale, even if a
+/// reload lands on the same set again.
+///
+/// A library is selected by name: "Default" and "Jazz" are built in, anything else is CHORDS/<name>.XML on the
+/// card. The selected name is remembered in the community feature settings.
 class ChordLibrary {
 public:
 	ChordLibrary() = default;
 
-	/// Point at the chords of the given built-in set
-	void setLibrary(ChordLibraryType newLibrary);
-	/// Re-read the ChordLibrary community feature setting and switch sets if it has changed since last time
+	/// Select a library by name. A file that cannot be read falls back to the default set and remembers the
+	/// problem (see lastError()), so a typo in a file can never leave the keyboard without chords.
+	void select(char const* name);
+	/// Move to the next library: Default, Jazz, then the CHORDS folder in alphabetical order, wrapping round
+	void selectNext();
+	/// Make the selection match the community feature setting, if it has changed since last time
 	void refreshFromSettings();
 
 	const Chord& chord(int8_t chordNo) const { return chords_[chordNo]; }
 	int8_t chordCount() const { return chordCount_; }
 	ChordLibraryType library() const { return library_; }
 	uint8_t generation() const { return generation_; }
+	/// Name of the selected library, as chosen (so a file's name even if it failed to load)
+	const char* name() const { return name_; }
+	/// Label for a page of the active library, or nullptr if it has none
+	const char* pageName(int32_t page) const;
+	/// Why the selected file could not be used, or nullptr if the selection loaded fine
+	const char* lastError() const { return lastError_[0] ? lastError_ : nullptr; }
 
 private:
+	void useBuiltIn(ChordLibraryType type);
+	bool useFile(char const* name);
+
 	// Starts on the built-in default so the table is never empty, even before the settings have been read
 	const Chord* chords_ = defaultChordLibrary.data();
 	int8_t chordCount_ = kDefaultLibraryChords;
 	ChordLibraryType library_ = ChordLibraryType::DEFAULT;
 	uint8_t generation_ = 0;
+	char name_[32] = "Default";
+	char lastError_[32] = "";
 };
 
 extern ChordLibrary chordLibrary;

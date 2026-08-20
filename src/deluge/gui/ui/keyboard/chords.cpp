@@ -18,11 +18,15 @@
 
 #include "gui/ui/keyboard/chords.h"
 #include "definitions_cxx.hpp"
+#include "gui/ui/keyboard/chord_library_file.h"
 #include "hid/display/display.h"
 #include "io/debug/log.h"
 #include "model/settings/runtime_feature_settings.h"
+#include "printf.h"
 #include <array>
+#include <cstring>
 #include <stdlib.h>
+#include <strings.h>
 
 namespace deluge::gui::ui::keyboard {
 
@@ -52,34 +56,95 @@ ChordQuality getChordQuality(NoteSet& notes) {
 	}
 }
 
-// The community feature setting stores the library as a plain integer, so anything unrecognised falls back
-// to the default set rather than indexing off the end of the switch in setLibrary().
-static ChordLibraryType selectedLibrary() {
-	return static_cast<ChordLibraryType>(runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary));
-}
-
 ChordLibrary chordLibrary{};
 
-void ChordLibrary::setLibrary(ChordLibraryType newLibrary) {
-	switch (newLibrary) {
+// The one file-backed library. Lives in SDRAM: ~5 KB, only ever touched from the UI.
+PLACE_SDRAM_BSS static ChordLibraryData fileLibrary;
+
+const char* const kJazzPageNames[] = {"Minor", "Major", "Altered"};
+
+void ChordLibrary::useBuiltIn(ChordLibraryType type) {
+	switch (type) {
 	case ChordLibraryType::JAZZ:
 		chords_ = jazzChordLibrary.data();
 		chordCount_ = kJazzLibraryChords;
 		break;
 	default:
-		newLibrary = ChordLibraryType::DEFAULT;
+		type = ChordLibraryType::DEFAULT;
 		chords_ = defaultChordLibrary.data();
 		chordCount_ = kDefaultLibraryChords;
 		break;
 	}
-	library_ = newLibrary;
+	library_ = type;
 	generation_++;
 }
 
+bool ChordLibrary::useFile(char const* name) {
+	Error error = readChordLibraryFile(name, fileLibrary, lastError_, sizeof(lastError_));
+	if (error != Error::NONE) {
+		return false;
+	}
+	chords_ = fileLibrary.chords;
+	chordCount_ = fileLibrary.chordCount;
+	library_ = ChordLibraryType::FILE;
+	generation_++;
+	return true;
+}
+
+void ChordLibrary::select(char const* name) {
+	lastError_[0] = '\0';
+	if (name == nullptr || *name == '\0' || strcasecmp(name, kDefaultChordLibraryName) == 0) {
+		name = kDefaultChordLibraryName;
+		useBuiltIn(ChordLibraryType::DEFAULT);
+	}
+	else if (strcasecmp(name, kJazzChordLibraryName) == 0) {
+		name = kJazzChordLibraryName;
+		useBuiltIn(ChordLibraryType::JAZZ);
+	}
+	else if (!useFile(name)) {
+		// Keep the name the user asked for, so the setting is not silently rewritten, but play the default set
+		useBuiltIn(ChordLibraryType::DEFAULT);
+	}
+	strncpy(name_, name, sizeof(name_) - 1);
+	name_[sizeof(name_) - 1] = '\0';
+}
+
+void ChordLibrary::selectNext() {
+	char next[kMaxChordLibraryNameLength];
+	const char* chosen;
+	if (library_ == ChordLibraryType::DEFAULT && strcasecmp(name_, kDefaultChordLibraryName) == 0) {
+		chosen = kJazzChordLibraryName;
+	}
+	else {
+		// After Jazz the files start from the top; after a file (loaded or not) the next one up alphabetically
+		const char* after = (library_ == ChordLibraryType::JAZZ) ? "" : name_;
+		chosen = nextChordLibraryFile(after, next) ? next : kDefaultChordLibraryName;
+	}
+	runtimeFeatureSettings.setChordLibraryName(chosen);
+	select(chosen);
+}
+
 void ChordLibrary::refreshFromSettings() {
-	ChordLibraryType selected = selectedLibrary();
-	if (selected != library_) {
-		setLibrary(selected);
+	const char* wanted = runtimeFeatureSettings.getChordLibraryName();
+	if (*wanted == '\0') {
+		wanted = kDefaultChordLibraryName;
+	}
+	if (strcasecmp(wanted, name_) != 0) {
+		select(wanted);
+	}
+}
+
+const char* ChordLibrary::pageName(int32_t page) const {
+	if (page < 0) {
+		return nullptr;
+	}
+	switch (library_) {
+	case ChordLibraryType::JAZZ:
+		return (page < (int32_t)(sizeof(kJazzPageNames) / sizeof(kJazzPageNames[0]))) ? kJazzPageNames[page] : nullptr;
+	case ChordLibraryType::FILE:
+		return (page < kMaxLibraryPages) ? fileLibrary.pageNames[page] : nullptr;
+	default:
+		return nullptr;
 	}
 }
 
