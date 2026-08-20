@@ -414,6 +414,7 @@ void KeyboardLayoutChordLibrary::renderPads(RGB image[][kDisplayWidth + kSideBar
 		int32_t noteCode = noteFromCoords(x);
 		uint16_t noteWithinOctave = (uint16_t)((noteCode + kOctaveSize) - getRootNote()) % kOctaveSize;
 		RGB columnColour = getNoteColour((noteCode % state.rowInterval) * state.rowColorMultiplier);
+		bool rootInScale = inScaleMode && octaveScaleNotes.has(noteWithinOctave);
 
 		for (int32_t y = 0; y < kDisplayHeight; ++y) {
 			int32_t chordNo = getChordNo(y);
@@ -430,8 +431,14 @@ void KeyboardLayoutChordLibrary::renderPads(RGB image[][kDisplayWidth + kSideBar
 				if (modulatedNoteSet.isSubsetOf(octaveScaleNotes)) {
 					image[y][x] = columnColour;
 				}
+				// Chromatic columns include roots that are not in the key at all. Separating those from roots
+				// that are in the key but carry an extension that isn't keeps a usable column from looking
+				// identical to one that can never be played in key.
+				else if (rootInScale) {
+					image[y][x] = columnColour.dim(2);
+				}
 				else {
-					image[y][x] = columnColour.dim(4);
+					image[y][x] = columnColour.dim(5);
 				}
 			}
 			// Outside scale mode nothing can be checked against a scale, so just highlight the root note
