@@ -41,6 +41,9 @@ enum RuntimeFeatureStateSyncScalingAction : uint32_t { SyncScaling = 0, Fill = 1
 
 enum RuntimeFeatureStateEmulatedDisplay : uint32_t { Hardware = 0, Toggle = 1, OnBoot = 2 };
 
+// Which chord set the chord library keyboard layout offers. Values match keyboard::ChordLibraryType.
+enum RuntimeFeatureStateChordLibrary : uint32_t { DefaultChords = 0, JazzChords = 1 };
+
 /// Every setting needs to be declared in here
 enum RuntimeFeatureSettingType : uint32_t {
 	DrumRandomizer,
@@ -67,6 +70,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	TrimFromStartOfAudioClip,
 	ShowBatteryLevel,
 	RoundedCorners,
+	ChordLibrary,
 	MaxElement // Keep as boundary
 };
 

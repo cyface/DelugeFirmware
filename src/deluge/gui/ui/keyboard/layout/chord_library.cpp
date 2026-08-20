@@ -95,6 +95,11 @@ void KeyboardLayoutChordLibrary::handleHorizontalEncoder(int32_t offset, bool sh
 
 void KeyboardLayoutChordLibrary::precalculate() {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
+
+	// The chord set is a community feature setting, which can be changed while a clip already holds a ChordList.
+	// This is a no-op unless the selection actually changed.
+	state.chordList.refreshFromSettings();
+
 	// On first render, offset by the root note. This can't be done in the constructor
 	// because at constructor time, root note changes from the default menu aren't seen yet
 	// or if the root note is changed in the song also isn't seen.

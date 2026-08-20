@@ -20,6 +20,7 @@
 #include "definitions_cxx.hpp"
 #include "hid/display/display.h"
 #include "io/debug/log.h"
+#include "model/settings/runtime_feature_settings.h"
 #include <array>
 #include <stdlib.h>
 
@@ -51,12 +52,53 @@ ChordQuality getChordQuality(NoteSet& notes) {
 	}
 }
 
-ChordList::ChordList()
-    : chords{
-          kEmptyChord, kMajor,  kMinor,  k6,      k2,   k69,      kSus2,    kSus4,   k7,         k7Sus4,      k7Sus2,
-          kM7,         kMinor7, kMinor2, kMinor4, kDim, kFullDim, kAug,     kMinor6, kMinorMaj7, kMinor7b5,   kMinor9b5,
-          kMinor7b5b9, k9,      kM9,     kMinor9, k11,  kM11,     kMinor11, k13,     kM13,       kM13Sharp11, kMinor13,
-      } {
+// The community feature setting stores the library as a plain integer, so anything unrecognised falls back
+// to the default set rather than indexing off the end of the switch in setLibrary().
+static ChordLibraryType selectedLibrary() {
+	return static_cast<ChordLibraryType>(runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary));
+}
+
+ChordList::ChordList() {
+	// Unconditional, not refreshFromSettings(): chords[] starts out uninitialised, so it has to be filled even
+	// when the selected library already matches the default value of `library`.
+	setLibrary(selectedLibrary());
+}
+
+void ChordList::setLibrary(ChordLibraryType newLibrary) {
+	const Chord* source;
+	switch (newLibrary) {
+	case ChordLibraryType::JAZZ:
+		source = jazzChordLibrary.data();
+		chordCount = kJazzLibraryChords;
+		break;
+	default:
+		newLibrary = ChordLibraryType::DEFAULT;
+		source = defaultChordLibrary.data();
+		chordCount = kDefaultLibraryChords;
+		break;
+	}
+	library = newLibrary;
+
+	for (int8_t i = 0; i < chordCount; i++) {
+		chords[i] = source[i];
+	}
+	// The libraries have different lengths, so blank out the tail rather than leave stale chords readable
+	for (int8_t i = chordCount; i < kUniqueChords; i++) {
+		chords[i] = kEmptyChord;
+	}
+
+	// Row and voicing selections index into the old library, so they mean nothing in the new one
+	chordRowOffset = 0;
+	for (int8_t i = 0; i < kUniqueChords; i++) {
+		voicingOffset[i] = 0;
+	}
+}
+
+void ChordList::refreshFromSettings() {
+	ChordLibraryType selected = selectedLibrary();
+	if (selected != library) {
+		setLibrary(selected);
+	}
 }
 
 Voicing ChordList::getChordVoicing(int8_t chordNo) {
@@ -96,8 +138,10 @@ Voicing ChordList::getChordVoicing(int8_t chordNo) {
 }
 
 void ChordList::adjustChordRowOffset(int8_t offset) {
+	// Libraries shorter than the default must not scroll into the blanked-out tail of chords[]
+	int8_t maxRowOffset = std::max<int8_t>(0, chordCount - kDisplayHeight);
 	if (offset > 0) {
-		chordRowOffset = std::min<int8_t>(kOffScreenChords, chordRowOffset + offset);
+		chordRowOffset = std::min<int8_t>(maxRowOffset, chordRowOffset + offset);
 	}
 	else {
 		chordRowOffset = std::max<int8_t>(0, chordRowOffset + offset);
@@ -121,9 +165,9 @@ int8_t ChordList::validateChordNo(int8_t chordNo) {
 		D_PRINTLN("Chord number is negative, returning chord 0");
 		chordNo = 0;
 	}
-	else if (chordNo >= kUniqueChords) {
+	else if (chordNo >= chordCount) {
 		D_PRINTLN("Chord number is too high, returning last chord");
-		chordNo = kUniqueChords - 1;
+		chordNo = chordCount - 1;
 	}
 	return chordNo;
 }
@@ -285,6 +329,86 @@ PLACE_SDRAM_DATA const Chord kMinor6 = {"-6",
                                         {
                                             {ROOT, MIN3, P5, MAJ6, NONE, NONE, NONE},
                                         }};
+
+PLACE_SDRAM_DATA const Chord kMinor69 = {
+    "-69",
+    NoteSet({ROOT, MIN3, P5, MAJ6, MAJ2}),
+    {{ROOT, MIN3, P5, MAJ6, MAJ9, NONE, NONE}, {ROOT, MIN3 + OCT, P5, MAJ6, MAJ9, NONE, NONE}}};
+PLACE_SDRAM_DATA const Chord kM7Sharp11 = {"M7#11",
+                                           NoteSet({ROOT, MAJ3, P5, MAJ7, AUG4}),
+                                           {{ROOT, MAJ3, P5, MAJ7, AUG11, NONE, NONE},
+                                            {{ROOT, MAJ3, P5, MAJ7, MAJ9, AUG11, NONE}, "ADD 9"},
+                                            {ROOT, MAJ3 + OCT, P5, MAJ7, AUG11, NONE, NONE},
+                                            {ROOT, MAJ3 + OCT, P5, MAJ7 + OCT, AUG11, NONE, NONE}}};
+PLACE_SDRAM_DATA const Chord k7b9 = {"7" FLAT_CHAR_STR "9",
+                                     NoteSet({ROOT, MAJ3, P5, MIN7, MIN2}),
+                                     {{ROOT, MAJ3, P5, MIN7, MIN9, NONE, NONE},
+                                      {ROOT, MAJ3 + OCT, P5, MIN7, MIN9, NONE, NONE},
+                                      {ROOT, MAJ3 + OCT, P5, MIN7 + OCT, MIN9, NONE, NONE}}};
+// The fifth is optional on a 7#9 - dropping it is what gives the "Hendrix" voicing its bite
+PLACE_SDRAM_DATA const Chord k7Sharp9 = {"7#9",
+                                         NoteSet({ROOT, MAJ3, P5, MIN7, MIN3}),
+                                         {{ROOT, MAJ3, P5, MIN7, MIN10, NONE, NONE},
+                                          {{ROOT, MAJ3, MIN7, MIN10, NONE, NONE, NONE}, "HENDRIX"},
+                                          {ROOT, MAJ3 + OCT, P5, MIN7, MIN10, NONE, NONE},
+                                          {ROOT, MAJ3 + OCT, P5, MIN7 + OCT, MIN10, NONE, NONE}}};
+PLACE_SDRAM_DATA const Chord k7Sharp11 = {"7#11",
+                                          NoteSet({ROOT, MAJ3, P5, MIN7, AUG4}),
+                                          {{ROOT, MAJ3, P5, MIN7, AUG11, NONE, NONE},
+                                           {{ROOT, MAJ3, P5, MIN7, MAJ9, AUG11, NONE}, "ADD 9"},
+                                           {ROOT, MAJ3 + OCT, P5, MIN7, AUG11, NONE, NONE},
+                                           {ROOT, MAJ3 + OCT, P5, MIN7 + OCT, AUG11, NONE, NONE}}};
+// The perfect fifth is left out of the b13 chords - a natural 5 a semitone under the b13 just muddies it
+PLACE_SDRAM_DATA const Chord k7b13 = {"7" FLAT_CHAR_STR "13",
+                                      NoteSet({ROOT, MAJ3, MIN7, MIN6}),
+                                      {{ROOT, MAJ3, MIN7, MIN13, NONE, NONE, NONE},
+                                       {{ROOT, MAJ3, MIN7, MAJ9, MIN13, NONE, NONE}, "ADD 9"},
+                                       {ROOT, MAJ3 + OCT, MIN7, MIN13, NONE, NONE, NONE}}};
+PLACE_SDRAM_DATA const Chord k7Alt = {"7ALT",
+                                      NoteSet({ROOT, MAJ3, MIN7, MIN3, MIN6}),
+                                      {{ROOT, MAJ3, MIN7, MIN10, MIN13, NONE, NONE},
+                                       {{ROOT, MAJ3, MIN7, MIN9, MIN13, NONE, NONE}, FLAT_CHAR_STR "9"},
+                                       {{ROOT, MAJ3, MIN7, MIN9, MIN10, MIN13, NONE}, "FULL"},
+                                       {ROOT, MAJ3 + OCT, MIN7, MIN10, MIN13, NONE, NONE}}};
+
+// The full library, in the order the chord library keyboard scrolls through it
+PLACE_SDRAM_DATA const std::array<const Chord, kDefaultLibraryChords> defaultChordLibrary = {
+    kEmptyChord, kMajor,  kMinor,  k6,      k2,   k69,      kSus2,    kSus4,   k7,         k7Sus4,      k7Sus2,
+    kM7,         kMinor7, kMinor2, kMinor4, kDim, kFullDim, kAug,     kMinor6, kMinorMaj7, kMinor7b5,   kMinor9b5,
+    kMinor7b5b9, k9,      kM9,     kMinor9, k11,  kM11,     kMinor11, k13,     kM13,       kM13Sharp11, kMinor13,
+};
+
+// Jazz library: three screens of eight, grouped so a page of the pad grid is one chord family.
+// Page 1 minor, page 2 dominant, page 3 major plus the half-diminished/diminished pair.
+PLACE_SDRAM_DATA const std::array<const Chord, kJazzLibraryChords> jazzChordLibrary = {
+    // Minor
+    kMinor,
+    kMinor7,
+    kMinor9,
+    kMinor11,
+    kMinor13,
+    kMinor6,
+    kMinor69,
+    kMinorMaj7,
+    // Dominant
+    k7,
+    k9,
+    k13,
+    k7b9,
+    k7Sharp9,
+    k7Sharp11,
+    k7b13,
+    k7Alt,
+    // Major, half-diminished and diminished
+    kMajor,
+    kM7,
+    kM9,
+    kM13,
+    kM7Sharp11,
+    kMinor7b5,
+    kMinor9b5,
+    kFullDim,
+};
 
 PLACE_SDRAM_DATA const std::array<const Chord, 10> majorChords = {kMajor, kM7,  k6,    k2,    k69,
                                                                   kM9,    kM13, kSus4, kSus2, kM13Sharp11};

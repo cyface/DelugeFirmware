@@ -25,7 +25,11 @@
 
 constexpr int8_t kMaxChordKeyboardSize = 7;
 constexpr int8_t kUniqueVoicings = 4;
-constexpr int8_t kUniqueChords = 33;
+// Size of each selectable chord library. kUniqueChords is the storage capacity of a ChordList, so it has to
+// stay at least as large as the biggest library.
+constexpr int8_t kDefaultLibraryChords = 33;
+constexpr int8_t kJazzLibraryChords = 24;
+constexpr int8_t kUniqueChords = kDefaultLibraryChords;
 constexpr int8_t kOffScreenChords = kUniqueChords - kDisplayHeight;
 
 namespace deluge::gui::ui::keyboard {
@@ -42,6 +46,12 @@ enum class ChordQuality {
 
 // Check and return the quality of a chord, assuming the notes are defined from the root, even if it is a rootless chord
 ChordQuality getChordQuality(NoteSet& notes);
+
+/// @brief Which set of chords the chord library keyboard offers. Selected by the ChordLibrary community feature.
+enum class ChordLibraryType : uint8_t {
+	DEFAULT = 0,
+	JAZZ = 1,
+};
 
 // Interval offsets for convenience
 const int8_t NONE = INT8_MAX;
@@ -122,6 +132,17 @@ extern const Chord k13;
 extern const Chord kM13;
 extern const Chord kM13Sharp11;
 extern const Chord kMinor13;
+extern const Chord kMinor69;
+extern const Chord kM7Sharp11;
+extern const Chord k7b9;
+extern const Chord k7Sharp9;
+extern const Chord k7Sharp11;
+extern const Chord k7b13;
+extern const Chord k7Alt;
+
+/// The chord sets a ChordList can be loaded with
+extern const std::array<const Chord, kDefaultLibraryChords> defaultChordLibrary;
+extern const std::array<const Chord, kJazzLibraryChords> jazzChordLibrary;
 
 extern const std::array<const Chord, 10> majorChords;
 
@@ -152,9 +173,18 @@ public:
 	void adjustChordRowOffset(int8_t offset);
 	void adjustVoicingOffset(int8_t chordNo, int8_t offset);
 
+	/// Load the chords of the given library, discarding any row/voicing selections made in the previous one
+	void setLibrary(ChordLibraryType newLibrary);
+
+	/// Re-read the ChordLibrary community feature setting and reload the chords if it has changed since last time
+	void refreshFromSettings();
+
 	Chord chords[kUniqueChords];
 	int8_t voicingOffset[kUniqueChords] = {0};
 	uint8_t chordRowOffset = 0;
+	/// How many entries of chords[] the active library actually fills
+	int8_t chordCount = kDefaultLibraryChords;
+	ChordLibraryType library = ChordLibraryType::DEFAULT;
 
 private:
 	int8_t validateChordNo(int8_t chordNo);

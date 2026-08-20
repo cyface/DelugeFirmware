@@ -102,6 +102,24 @@ static void SetupEmulatedDisplaySetting(RuntimeFeatureSetting& setting, deluge::
 	};
 }
 
+static void SetupChordLibrarySetting(RuntimeFeatureSetting& setting, deluge::l10n::String displayName,
+                                     std::string_view xmlName, RuntimeFeatureStateChordLibrary def) {
+	setting.displayName = displayName;
+	setting.xmlName = xmlName;
+	setting.value = static_cast<uint32_t>(def);
+
+	setting.options = {
+	    {
+	        .displayName = display->haveOLED() ? "Default" : "DFLT",
+	        .value = RuntimeFeatureStateChordLibrary::DefaultChords,
+	    },
+	    {
+	        .displayName = display->haveOLED() ? "Jazz" : "JAZZ",
+	        .value = RuntimeFeatureStateChordLibrary::JazzChords,
+	    },
+	};
+}
+
 void RuntimeFeatureSettings::init() {
 	using enum deluge::l10n::String;
 	// Drum randomizer
@@ -204,6 +222,11 @@ void RuntimeFeatureSettings::init() {
 	// Rounded Corners
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::RoundedCorners], STRING_FOR_COMMUNITY_FEATURE_ROUNDED_CORNERS,
 	                  "roundedCorners", RuntimeFeatureStateToggle::On);
+
+	// Chord set offered by the chord library keyboard layout
+	SetupChordLibrarySetting(settings[RuntimeFeatureSettingType::ChordLibrary],
+	                         STRING_FOR_COMMUNITY_FEATURE_CHORD_LIBRARY, "chordLibrary",
+	                         RuntimeFeatureStateChordLibrary::DefaultChords);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {
