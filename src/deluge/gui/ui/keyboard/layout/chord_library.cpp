@@ -305,6 +305,9 @@ void KeyboardLayoutChordLibrary::popupOctave() {
 void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
+	if (!controlPadActive(x, y)) {
+		return;
+	}
 	if (x == kPageColumn) {
 		if (y >= kVerticalPages) {
 			return;
@@ -363,9 +366,21 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 	}
 }
 
+bool KeyboardLayoutChordLibrary::controlPadActive(int32_t x, int32_t y) {
+	// Pages and the chord-grid modes mean nothing while playing single notes, so they are dark and inert in
+	// lead mode - only the octave pads and the way back out stay live
+	if (usingLeadMode()) {
+		return x == kControlColumn && y < kControlRowScaleDegree;
+	}
+	return true;
+}
+
 void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
+	if (!controlPadActive(x, y)) {
+		return;
+	}
 	if (x == kPageColumn) {
 		if (y >= kVerticalPages) {
 			return;
@@ -587,12 +602,13 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
 	bool diatonic = usingDiatonicQuality();
+	bool lead = usingLeadMode();
 	int32_t pages = pageCount();
 	int32_t currentPage = state.chordList.chordRowOffset / kDisplayHeight;
 
 	// Page pads run bottom-up, matching the chord rows themselves - chord 0 sits on the bottom row
 	for (int32_t y = 0; y < kDisplayHeight; ++y) {
-		if (y >= kVerticalPages || diatonic || y >= pages) {
+		if (y >= kVerticalPages || diatonic || lead || y >= pages) {
 			image[y][kPageColumn] = colours::black;
 		}
 		else {
@@ -614,12 +630,14 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 		return on ? colour : colour.forTail();
 	};
 
-	image[kControlRowScaleDegree][kControlColumn] = toggleColour(colours::darkblue, state.scaleDegreeColumns);
-	image[kControlRowDiatonic][kControlColumn] = toggleColour(colours::green, state.diatonicQuality);
+	if (!lead) {
+		image[kControlRowScaleDegree][kControlColumn] = toggleColour(colours::darkblue, state.scaleDegreeColumns);
+		image[kControlRowDiatonic][kControlColumn] = toggleColour(colours::green, state.diatonicQuality);
 
-	// The built-in set is dim, a library from the card is bright
-	image[kControlRowLibrary][kControlColumn] =
-	    (chordLibrary.library() == ChordLibraryType::FILE) ? colours::yellow : colours::orange.forTail();
+		// The built-in set is dim, a library from the card is bright
+		image[kControlRowLibrary][kControlColumn] =
+		    (chordLibrary.library() == ChordLibraryType::FILE) ? colours::yellow : colours::orange.forTail();
+	}
 
 	// Play group: brighter cyan is up, so the pair reads as a direction without a label
 	image[kControlRowOctaveUp][kControlColumn] = colours::cyan_full;
