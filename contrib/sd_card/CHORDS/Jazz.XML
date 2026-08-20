@@ -1,35 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <chordLibrary name="Jazz"
 	note="This is the built-in Jazz set, written out as a reference. The Deluge ignores a file with this name because the set is always built in - to make your own, copy it to a new name such as MyJazz.XML and edit that. See README.md for the format.">
-	<page name="Minor">
+	<page name="Chart">
+		<chord name="M">
+			<voicing notes="ROOT, MAJ3, P5" />
+			<voicing notes="ROOT, MAJ10, P5" />
+			<voicing notes="ROOT, MAJ10, P5, -OCT" />
+		</chord>
 		<chord name="-">
 			<voicing notes="ROOT, MIN3, P5" />
 			<voicing notes="ROOT, MIN10, P5" />
 			<voicing notes="ROOT, MIN10, P5, -OCT" />
+		</chord>
+		<chord name="7">
+			<voicing notes="ROOT, MAJ3, P5, MIN7" />
+			<voicing notes="ROOT, MAJ10, P5, MIN7" />
+			<voicing notes="ROOT, MAJ10, P5, MIN14" />
 		</chord>
 		<chord name="-7">
 			<voicing notes="ROOT, MIN3, P5, MIN7" />
 			<voicing notes="ROOT, MIN10, P5, MIN7" />
 			<voicing notes="ROOT, MIN10, P5, MIN14" />
 		</chord>
-		<chord name="-9">
-			<voicing notes="ROOT, MIN3, P5, MIN7, MAJ9" />
-			<voicing notes="ROOT, MIN10, P5, MIN7, MAJ9" />
-			<voicing notes="ROOT, MIN10, P5, MIN14, MAJ9" />
-		</chord>
-		<chord name="-11">
-			<voicing notes="ROOT, MIN3, P5, MIN7, MAJ9, P11" />
-			<voicing name="SO WHAT" notes="ROOT, P4, MIN7, MIN10, P12" />
-			<voicing notes="ROOT, MIN10, P5, MIN7, MAJ9, P11" />
-			<voicing notes="ROOT, MIN10, P5, MIN14, MAJ9, P11" />
-		</chord>
-		<chord name="-6">
-			<voicing notes="ROOT, MIN3, P5, MAJ6" />
-		</chord>
-		<chord name="-M7">
-			<voicing notes="ROOT, MIN3, P5, MAJ7" />
-			<voicing notes="ROOT, MIN10, P5, MAJ7" />
-			<voicing notes="ROOT, MIN10, P5, MAJ14" />
+		<chord name="M7">
+			<voicing notes="ROOT, MAJ3, P5, MAJ7" />
+			<voicing notes="ROOT, MAJ10, P5, MAJ7" />
+			<voicing notes="ROOT, MAJ10, P5, MAJ14" />
 		</chord>
 		<chord name="-7b5">
 			<voicing notes="ROOT, MIN3, AUG4, MIN7" />
@@ -41,43 +37,40 @@
 			<voicing notes="ROOT, MAJ10, P5, MIN7, MIN9" />
 			<voicing notes="ROOT, MAJ10, P5, MIN14, MIN9" />
 		</chord>
-	</page>
-	<page name="Major">
-		<chord name="M">
-			<voicing notes="ROOT, MAJ3, P5" />
-			<voicing notes="ROOT, MAJ10, P5" />
-			<voicing notes="ROOT, MAJ10, P5, -OCT" />
+		<chord name="FULLDIM">
+			<voicing notes="ROOT, MIN3, AUG4, MAJ6" />
 		</chord>
-		<chord name="M7">
-			<voicing notes="ROOT, MAJ3, P5, MAJ7" />
-			<voicing notes="ROOT, MAJ10, P5, MAJ7" />
-			<voicing notes="ROOT, MAJ10, P5, MAJ14" />
+	</page>
+	<page name="Extensions">
+		<chord name="6">
+			<voicing notes="ROOT, MAJ3, P5, MAJ6" />
+		</chord>
+		<chord name="69">
+			<voicing notes="ROOT, MAJ3, P5, MAJ6, MAJ9" />
+		</chord>
+		<chord name="-6">
+			<voicing notes="ROOT, MIN3, P5, MAJ6" />
+		</chord>
+		<chord name="-9">
+			<voicing notes="ROOT, MIN3, P5, MIN7, MAJ9" />
+			<voicing notes="ROOT, MIN10, P5, MIN7, MAJ9" />
+			<voicing notes="ROOT, MIN10, P5, MIN14, MAJ9" />
+		</chord>
+		<chord name="9">
+			<voicing notes="ROOT, MAJ3, P5, MIN7, MAJ9" />
+			<voicing notes="ROOT, MAJ10, P5, MIN7, MAJ9" />
+			<voicing notes="ROOT, MAJ10, P5, MIN14, MAJ9" />
 		</chord>
 		<chord name="M9">
 			<voicing notes="ROOT, MAJ3, P5, MAJ7, MAJ9" />
 			<voicing notes="ROOT, MAJ10, P5, MAJ7, MAJ9" />
 			<voicing notes="ROOT, MAJ10, P5, MAJ14, MAJ9" />
 		</chord>
-		<chord name="M13">
-			<voicing notes="ROOT, MAJ3, P5, MAJ7, MAJ9, MAJ13" />
-			<voicing notes="ROOT, MAJ10, P5, MAJ7, MAJ9, MAJ13" />
-			<voicing notes="ROOT, MAJ10, P5, MAJ14, MAJ9, MAJ13" />
-		</chord>
-		<chord name="M7#11">
-			<voicing notes="ROOT, MAJ3, P5, MAJ7, AUG11" />
-			<voicing name="ADD 9" notes="ROOT, MAJ3, P5, MAJ7, MAJ9, AUG11" />
-			<voicing notes="ROOT, MAJ10, P5, MAJ7, AUG11" />
-			<voicing notes="ROOT, MAJ10, P5, MAJ14, AUG11" />
-		</chord>
-		<chord name="7">
-			<voicing notes="ROOT, MAJ3, P5, MIN7" />
-			<voicing notes="ROOT, MAJ10, P5, MIN7" />
-			<voicing notes="ROOT, MAJ10, P5, MIN14" />
-		</chord>
-		<chord name="9">
-			<voicing notes="ROOT, MAJ3, P5, MIN7, MAJ9" />
-			<voicing notes="ROOT, MAJ10, P5, MIN7, MAJ9" />
-			<voicing notes="ROOT, MAJ10, P5, MIN14, MAJ9" />
+		<chord name="-11">
+			<voicing notes="ROOT, MIN3, P5, MIN7, MAJ9, P11" />
+			<voicing name="SO WHAT" notes="ROOT, P4, MIN7, MIN10, P12" />
+			<voicing notes="ROOT, MIN10, P5, MIN7, MAJ9, P11" />
+			<voicing notes="ROOT, MIN10, P5, MIN14, MAJ9, P11" />
 		</chord>
 		<chord name="13">
 			<voicing notes="ROOT, MAJ3, P5, MIN7, MAJ9, MAJ13" />
@@ -109,20 +102,26 @@
 			<voicing name="FULL" notes="ROOT, MAJ3, MIN7, MIN9, MIN10, MIN13" />
 			<voicing notes="ROOT, MAJ10, MIN7, MIN10, MIN13" />
 		</chord>
-		<chord name="-13">
-			<voicing notes="ROOT, MIN3, P5, MIN7, MAJ9, P11, MAJ13" />
-			<voicing notes="ROOT, MIN10, P5, MIN7, MAJ9, P11, MAJ13" />
-			<voicing notes="ROOT, MIN10, P5, MIN14, MAJ9, P11, MAJ13" />
+		<chord name="M7#11">
+			<voicing notes="ROOT, MAJ3, P5, MAJ7, AUG11" />
+			<voicing name="ADD 9" notes="ROOT, MAJ3, P5, MAJ7, MAJ9, AUG11" />
+			<voicing notes="ROOT, MAJ10, P5, MAJ7, AUG11" />
+			<voicing notes="ROOT, MAJ10, P5, MAJ14, AUG11" />
 		</chord>
-		<chord name="-69">
-			<voicing notes="ROOT, MIN3, P5, MAJ6, MAJ9" />
-			<voicing notes="ROOT, MIN10, P5, MAJ6, MAJ9" />
+		<chord name="-M7">
+			<voicing notes="ROOT, MIN3, P5, MAJ7" />
+			<voicing notes="ROOT, MIN10, P5, MAJ7" />
+			<voicing notes="ROOT, MIN10, P5, MAJ14" />
 		</chord>
-		<chord name="-9b5">
-			<voicing notes="ROOT, MIN3, AUG4, MIN7, MAJ9" />
+		<chord name="AUG">
+			<voicing notes="ROOT, MIN3, AUG5" />
+			<voicing notes="ROOT, MIN10, AUG5" />
+			<voicing notes="ROOT, MIN10, AUG5, -OCT" />
 		</chord>
-		<chord name="FULLDIM">
-			<voicing notes="ROOT, MIN3, AUG4, MAJ6" />
+		<chord name="7SUS4">
+			<voicing notes="ROOT, P4, P5, MIN7" />
+			<voicing notes="ROOT, P11, P5, MIN7" />
+			<voicing notes="ROOT, P11, P5, MIN14" />
 		</chord>
 	</page>
 </chordLibrary>

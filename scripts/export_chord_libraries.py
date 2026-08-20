@@ -62,7 +62,7 @@ CANONICAL[20] = "MIN13"
 CANONICAL[21] = "MAJ13"
 CANONICAL[22] = "MIN14"
 
-PAGE_NAMES = {"jazzChordLibrary": ["Minor", "Major", "Altered"]}
+PAGE_NAMES = {"jazzChordLibrary": ["Chart", "Extensions", "Altered"]}
 FILE_NAMES = {"defaultChordLibrary": "Default", "jazzChordLibrary": "Jazz"}
 
 

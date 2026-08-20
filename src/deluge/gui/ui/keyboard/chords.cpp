@@ -61,7 +61,7 @@ ChordLibrary chordLibrary{};
 // The one file-backed library. Lives in SDRAM: ~5 KB, only ever touched from the UI.
 PLACE_SDRAM_BSS static ChordLibraryData fileLibrary;
 
-const char* const kJazzPageNames[] = {"Minor", "Major", "Altered"};
+const char* const kJazzPageNames[] = {"Chart", "Extensions", "Altered"};
 
 void ChordLibrary::useBuiltIn(ChordLibraryType type) {
 	switch (type) {
@@ -435,36 +435,38 @@ PLACE_SDRAM_DATA const std::array<const Chord, kDefaultLibraryChords> defaultCho
     kMinor7b5b9, k9,      kM9,     kMinor9, k11,  kM11,     kMinor11, k13,     kM13,       kM13Sharp11, kMinor13,
 };
 
-// Jazz library: three screens of eight, grouped by harmonic function rather than by chord family, so one
-// page covers one key. Within a page the order runs tonic, extensions, predominant, dominant.
+// Jazz library: a chord chart. Page one stacks the qualities a lead sheet actually calls for, so a standard is
+// played by walking the root columns and picking the row - e.g. Autumn Leaves is -7, 7, maj7, maj7, -7b5, 7b9, -
+// without leaving the page. Pages two and three hold the same idea with more colour: extensions, then altered
+// and suspended voicings. Rows run bottom to top.
 PLACE_SDRAM_DATA const std::array<const Chord, kJazzLibraryChords> jazzChordLibrary = {
-    // Minor key: i and its extensions, then the ii-V that leads to it
+    // Chart: triads, the ii-V-I qualities in major and minor, and the diminished passing chord
+    kMajor,
     kMinor,
+    k7,
     kMinor7,
-    kMinor9,
-    kMinor11,
-    kMinor6,
-    kMinorMaj7,
+    kM7,
     kMinor7b5,
     k7b9,
-    // Major key: I and its extensions, then the V
-    kMajor,
-    kM7,
-    kM9,
-    kM13,
-    kM7Sharp11,
-    k7,
+    kFullDim,
+    // Extensions: sixths and the ninths, elevenths and thirteenth
+    k6,
+    k69,
+    kMinor6,
+    kMinor9,
     k9,
+    kM9,
+    kMinor11,
     k13,
-    // Colour and altered
+    // Altered: altered dominants, then the sharp-eleven, minor-major, augmented and suspended colours
     k7Sharp9,
     k7Sharp11,
     k7b13,
     k7Alt,
-    kMinor13,
-    kMinor69,
-    kMinor9b5,
-    kFullDim,
+    kM7Sharp11,
+    kMinorMaj7,
+    kAug,
+    k7Sus4,
 };
 
 PLACE_SDRAM_DATA const std::array<const Chord, 10> majorChords = {kMajor, kM7,  k6,    k2,    k69,
