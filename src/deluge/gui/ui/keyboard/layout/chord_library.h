@@ -80,6 +80,9 @@ private:
 	const char* nameForIntervals(NoteSet intervals);
 
 	void handleControlPad(int32_t y);
+	/// Says what a control pad currently is, so holding one describes it and releasing confirms the change
+	void popupControlState(int32_t y);
+	void popupPage(int32_t page);
 	void renderControlColumn(RGB image[][kDisplayWidth + kSideBarWidth]);
 	int32_t pageCount();
 
@@ -87,6 +90,8 @@ private:
 
 	std::array<RGB, kVerticalPages> pageColours;
 	bool initializedNoteOffset = false;
+	/// Which control pad the held-pad description is currently showing, so it is emitted once per press
+	int8_t lastDescribedControlPad = -1;
 };
 
 }; // namespace deluge::gui::ui::keyboard::layout
