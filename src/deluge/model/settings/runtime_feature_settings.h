@@ -43,6 +43,8 @@ enum RuntimeFeatureStateEmulatedDisplay : uint32_t { Hardware = 0, Toggle = 1, O
 
 // Values are the per-channel brightness numerator (out of 255) applied to unarmed clip pads in grid view
 enum RuntimeFeatureStateGridUnarmedClipBrightness : uint32_t { Dim = 10, Medium = 28, Bright = 64 };
+// Which chord set the chord library keyboard layout offers. Values match keyboard::ChordLibraryType.
+enum RuntimeFeatureStateChordLibrary : uint32_t { DefaultChords = 0, JazzChords = 1 };
 
 /// Every setting needs to be declared in here
 enum RuntimeFeatureSettingType : uint32_t {
@@ -73,6 +75,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	SysexPresetReload,
 	GridUnarmedClipBrightness,
 	DrumVelocityLayers,
+	ChordLibrary,
 	MaxElement // Keep as boundary
 };
 
