@@ -58,46 +58,39 @@ static ChordLibraryType selectedLibrary() {
 	return static_cast<ChordLibraryType>(runtimeFeatureSettings.get(RuntimeFeatureSettingType::ChordLibrary));
 }
 
-ChordList::ChordList() {
-	// Unconditional, not refreshFromSettings(): chords[] starts out uninitialised, so it has to be filled even
-	// when the selected library already matches the default value of `library`.
-	setLibrary(selectedLibrary());
-}
+ChordLibrary chordLibrary{};
 
-void ChordList::setLibrary(ChordLibraryType newLibrary) {
-	const Chord* source;
+void ChordLibrary::setLibrary(ChordLibraryType newLibrary) {
 	switch (newLibrary) {
 	case ChordLibraryType::JAZZ:
-		source = jazzChordLibrary.data();
-		chordCount = kJazzLibraryChords;
+		chords_ = jazzChordLibrary.data();
+		chordCount_ = kJazzLibraryChords;
 		break;
 	default:
 		newLibrary = ChordLibraryType::DEFAULT;
-		source = defaultChordLibrary.data();
-		chordCount = kDefaultLibraryChords;
+		chords_ = defaultChordLibrary.data();
+		chordCount_ = kDefaultLibraryChords;
 		break;
 	}
-	library = newLibrary;
+	library_ = newLibrary;
+	generation_++;
+}
 
-	for (int8_t i = 0; i < chordCount; i++) {
-		chords[i] = source[i];
-	}
-	// The libraries have different lengths, so blank out the tail rather than leave stale chords readable
-	for (int8_t i = chordCount; i < kUniqueChords; i++) {
-		chords[i] = kEmptyChord;
-	}
-
-	// Row and voicing selections index into the old library, so they mean nothing in the new one
-	chordRowOffset = 0;
-	for (int8_t i = 0; i < kUniqueChords; i++) {
-		voicingOffset[i] = 0;
+void ChordLibrary::refreshFromSettings() {
+	ChordLibraryType selected = selectedLibrary();
+	if (selected != library_) {
+		setLibrary(selected);
 	}
 }
 
 void ChordList::refreshFromSettings() {
-	ChordLibraryType selected = selectedLibrary();
-	if (selected != library) {
-		setLibrary(selected);
+	chordLibrary.refreshFromSettings();
+	if (seenGeneration != chordLibrary.generation()) {
+		seenGeneration = chordLibrary.generation();
+		chordRowOffset = 0;
+		for (int8_t i = 0; i < kUniqueChords; i++) {
+			voicingOffset[i] = 0;
+		}
 	}
 }
 
@@ -107,7 +100,7 @@ Voicing ChordList::getChordVoicing(int8_t chordNo) {
 
 	int8_t voicingNo = voicingOffset[chordNo];
 	if (voicingNo <= 0) {
-		return chords[chordNo].voicings[0];
+		return chordLibrary.chord(chordNo).voicings[0];
 	}
 	// Check if voicing is valid
 	// voicings after the first should default to 0
@@ -119,7 +112,7 @@ Voicing ChordList::getChordVoicing(int8_t chordNo) {
 			voicingNo = kUniqueVoicings - 1;
 		}
 		for (int voicingN = voicingNo; voicingN >= 0; voicingN--) {
-			Voicing voicing = chords[chordNo].voicings[voicingN];
+			Voicing voicing = chordLibrary.chord(chordNo).voicings[voicingN];
 
 			bool valid = false;
 			for (int j = 0; j < kMaxChordKeyboardSize; j++) {
@@ -132,14 +125,13 @@ Voicing ChordList::getChordVoicing(int8_t chordNo) {
 			}
 		}
 		D_PRINTLN("Voicing is invalid, returning default voicing");
-		return chords[0].voicings[0];
+		return chordLibrary.chord(0).voicings[0];
 	}
-	return chords[chordNo].voicings[0];
+	return chordLibrary.chord(chordNo).voicings[0];
 }
 
 void ChordList::adjustChordRowOffset(int8_t offset) {
-	// Libraries shorter than the default must not scroll into the blanked-out tail of chords[]
-	int8_t maxRowOffset = std::max<int8_t>(0, chordCount - kDisplayHeight);
+	int8_t maxRowOffset = std::max<int8_t>(0, chordCount() - kDisplayHeight);
 	if (offset > 0) {
 		chordRowOffset = std::min<int8_t>(maxRowOffset, chordRowOffset + offset);
 	}
@@ -165,9 +157,9 @@ int8_t ChordList::validateChordNo(int8_t chordNo) {
 		D_PRINTLN("Chord number is negative, returning chord 0");
 		chordNo = 0;
 	}
-	else if (chordNo >= chordCount) {
+	else if (chordNo >= chordCount()) {
 		D_PRINTLN("Chord number is too high, returning last chord");
-		chordNo = chordCount - 1;
+		chordNo = chordCount() - 1;
 	}
 	return chordNo;
 }
