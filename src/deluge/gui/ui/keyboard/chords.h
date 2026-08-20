@@ -156,10 +156,41 @@ extern const std::array<const Chord, 10> augmentedChords;
 
 extern const std::array<const Chord, 10> otherChords;
 
-/// @brief A collection of chords
+/// @brief The chord table every clip's chord library keyboard reads from.
+///
+/// There is exactly one of these (`chordLibrary`), shared by every clip. It only points at the active chord set,
+/// so switching sets is a pointer swap and costs no RAM per clip - the per-clip state (scroll position, chosen
+/// voicings) lives in ChordList. `generation` bumps on every swap so ChordLists can tell their offsets have gone
+/// stale, even if a future reload lands on the same ChordLibraryType again.
+class ChordLibrary {
+public:
+	ChordLibrary() = default;
+
+	/// Point at the chords of the given built-in set
+	void setLibrary(ChordLibraryType newLibrary);
+	/// Re-read the ChordLibrary community feature setting and switch sets if it has changed since last time
+	void refreshFromSettings();
+
+	const Chord& chord(int8_t chordNo) const { return chords_[chordNo]; }
+	int8_t chordCount() const { return chordCount_; }
+	ChordLibraryType library() const { return library_; }
+	uint8_t generation() const { return generation_; }
+
+private:
+	// Starts on the built-in default so the table is never empty, even before the settings have been read
+	const Chord* chords_ = defaultChordLibrary.data();
+	int8_t chordCount_ = kDefaultLibraryChords;
+	ChordLibraryType library_ = ChordLibraryType::DEFAULT;
+	uint8_t generation_ = 0;
+};
+
+extern ChordLibrary chordLibrary;
+
+/// @brief A clip's view onto the shared chord library: which page it is scrolled to and which voicing of each
+/// chord it has chosen. Holds no chord data of its own.
 class ChordList {
 public:
-	ChordList();
+	ChordList() = default;
 
 	/**
 	 * @brief Get a voicing for a chord with a given index. If the voicingOffset for that Chord is out of bounds,
@@ -169,25 +200,24 @@ public:
 	 * @return The voicing
 	 */
 	Voicing getChordVoicing(int8_t chordNo);
-
 	void adjustChordRowOffset(int8_t offset);
 	void adjustVoicingOffset(int8_t chordNo, int8_t offset);
 
-	/// Load the chords of the given library, discarding any row/voicing selections made in the previous one
-	void setLibrary(ChordLibraryType newLibrary);
-
-	/// Re-read the ChordLibrary community feature setting and reload the chords if it has changed since last time
+	/// Make sure the shared library matches the community feature setting, and forget this clip's row/voicing
+	/// selections if the library has changed since they were made - they index into a set that is gone.
 	void refreshFromSettings();
 
-	Chord chords[kUniqueChords];
+	const Chord& chord(int8_t chordNo) { return chordLibrary.chord(validateChordNo(chordNo)); }
+	int8_t chordCount() const { return chordLibrary.chordCount(); }
+	ChordLibraryType library() const { return chordLibrary.library(); }
+
 	int8_t voicingOffset[kUniqueChords] = {0};
 	uint8_t chordRowOffset = 0;
-	/// How many entries of chords[] the active library actually fills
-	int8_t chordCount = kDefaultLibraryChords;
-	ChordLibraryType library = ChordLibraryType::DEFAULT;
 
 private:
 	int8_t validateChordNo(int8_t chordNo);
+	/// Library generation the offsets above were made against
+	uint8_t seenGeneration = 0;
 };
 
 } // namespace deluge::gui::ui::keyboard

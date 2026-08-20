@@ -171,7 +171,7 @@ const char* KeyboardLayoutChordLibrary::nameForIntervals(NoteSet intervals) {
 }
 
 int32_t KeyboardLayoutChordLibrary::pageCount() {
-	int32_t count = getState().chordLibrary.chordList.chordCount;
+	int32_t count = getState().chordLibrary.chordList.chordCount();
 	return std::min<int32_t>(kVerticalPages, (count + kDisplayHeight - 1) / kDisplayHeight);
 }
 
@@ -236,7 +236,7 @@ void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboard
 		int32_t chordNo = getChordNo(pressed.y);
 
 		Voicing voicing = state.chordList.getChordVoicing(chordNo);
-		drawChordName(noteFromCoords(pressed.x), state.chordList.chords[chordNo].name, voicing.supplementalName);
+		drawChordName(noteFromCoords(pressed.x), state.chordList.chord(chordNo).name, voicing.supplementalName);
 
 		for (int i = 0; i < kMaxChordKeyboardSize; i++) {
 			int32_t offset = voicing.offsets[i];
@@ -264,7 +264,7 @@ void KeyboardLayoutChordLibrary::popupPage(int32_t page) {
 	char longText[32];
 	sprintf(shortText, "PG%d", (int)page + 1);
 
-	const char* label = pageLabel(getState().chordLibrary.chordList.library, page);
+	const char* label = pageLabel(getState().chordLibrary.chordList.library(), page);
 	if (label) {
 		sprintf(longText, "Page %d - %s", (int)page + 1, label);
 	}
@@ -361,7 +361,7 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 		}
 		// Diatonic mode has one fixed screen of shapes, so there are no pages to jump between
 		if (!usingDiatonicQuality() && y < pageCount()) {
-			int32_t maxRowOffset = std::max<int32_t>(0, state.chordList.chordCount - kDisplayHeight);
+			int32_t maxRowOffset = std::max<int32_t>(0, state.chordList.chordCount() - kDisplayHeight);
 			state.chordList.chordRowOffset = std::min<int32_t>(y * kDisplayHeight, maxRowOffset);
 		}
 	}
@@ -470,7 +470,7 @@ void KeyboardLayoutChordLibrary::precalculate() {
 	KeyboardStateChordLibrary& state = getState().chordLibrary;
 
 	// The chord set is a community feature setting, which can be changed while a clip already holds a ChordList.
-	// This is a no-op unless the selection actually changed.
+	// This also makes sure the shared chord table is loaded at all; it is a no-op once nothing has changed.
 	state.chordList.refreshFromSettings();
 
 	// Line the grid up with the song's key. This can't be done in the constructor, because at constructor
@@ -547,7 +547,7 @@ void KeyboardLayoutChordLibrary::renderPads(RGB image[][kDisplayWidth + kSideBar
 				image[y][x] = (noteWithinOctave == 0) ? columnColour : columnColour.dim(1);
 			}
 			else if (inScaleMode) {
-				NoteSet intervalSet = state.chordList.chords[chordNo].intervalSet;
+				NoteSet intervalSet = state.chordList.chord(chordNo).intervalSet;
 				NoteSet modulatedNoteSet = intervalSet.modulateByOffset(noteWithinOctave);
 
 				if (modulatedNoteSet.isSubsetOf(octaveScaleNotes)) {
