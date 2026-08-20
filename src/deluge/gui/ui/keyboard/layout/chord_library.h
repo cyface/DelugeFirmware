@@ -27,16 +27,23 @@ namespace deluge::gui::ui::keyboard::layout {
 
 constexpr int8_t kVerticalPages = ((kUniqueChords + kDisplayHeight - 1) / kDisplayHeight); // Round up division
 
-/// The rightmost grid column is a control strip, so only the columns to its left play chords.
-constexpr int32_t kControlColumn = kDisplayWidth - 1;
-constexpr int32_t kChordLibraryColumns = kControlColumn;
+/// The two rightmost grid columns are control strips, so only the columns to their left play chords.
+constexpr int32_t kControlColumn = kDisplayWidth - 1; // modes at the top, play controls at the bottom
+constexpr int32_t kPageColumn = kDisplayWidth - 2;    // one pad per page of the active library
+constexpr int32_t kChordLibraryColumns = kPageColumn;
 
-/// Control strip rows, as firmware row indices - row 0 is the BOTTOM of the display, matching the chord
-/// rows themselves. Rows 0..kVerticalPages-1 jump to that page; the rest are mode toggles.
-constexpr int32_t kControlRowScaleDegree = kVerticalPages;
-constexpr int32_t kControlRowDiatonic = kVerticalPages + 1;
-constexpr int32_t kControlRowLibrary = kVerticalPages + 2;
-static_assert(kControlRowLibrary < kDisplayHeight, "Control strip needs a row per page plus three toggles");
+/// Control rows, as firmware row indices - row 0 is the BOTTOM of the display, matching the chord rows
+/// themselves. The gap at rows 3 and 4 separates the mode group from the play group.
+constexpr int32_t kControlRowLead = 0;
+constexpr int32_t kControlRowOctaveDown = 1;
+constexpr int32_t kControlRowOctaveUp = 2;
+constexpr int32_t kControlRowScaleDegree = 5;
+constexpr int32_t kControlRowDiatonic = 6;
+constexpr int32_t kControlRowLibrary = 7;
+static_assert(kVerticalPages <= kDisplayHeight, "Page column needs one row per page");
+
+/// Keep the bottom-left note low enough that a seven note voicing on top of it still fits in MIDI range
+constexpr int32_t kMaxBottomNote = 96;
 
 /// @brief Represents a keyboard layout for chord-based input.
 class KeyboardLayoutChordLibrary : public ColumnControlsKeyboard {
@@ -65,7 +72,17 @@ private:
 	/// True when the scale-aware modes are actually in effect - they need a scale to work from
 	bool scaleModesActive() { return getScaleModeEnabled(); }
 	bool usingScaleDegrees() { return scaleModesActive() && getState().chordLibrary.scaleDegreeColumns; }
-	bool usingDiatonicQuality() { return scaleModesActive() && getState().chordLibrary.diatonicQuality; }
+	bool usingDiatonicQuality() {
+		return scaleModesActive() && getState().chordLibrary.diatonicQuality && !getState().chordLibrary.leadMode;
+	}
+	bool usingLeadMode() { return getState().chordLibrary.leadMode; }
+
+	/// Note under a grid pad while playing lead, on the same isomorphic grid as the isomorphic layout
+	uint8_t noteFromLeadCoords(int32_t x, int32_t y);
+	/// Move whatever the active mode scrolls by a whole octave
+	void shiftOctave(int32_t direction);
+	/// Lowest note currently reachable, used to report where an octave shift landed
+	int32_t bottomNote();
 
 	/// Root note under a grid column, either chromatic or stepping through the scale
 	uint8_t noteFromCoords(int32_t x);
@@ -79,10 +96,11 @@ private:
 	/// Name for a set of intervals, looked up across both libraries, or nullptr if nothing matches
 	const char* nameForIntervals(NoteSet intervals);
 
-	void handleControlPad(int32_t y);
+	void handleControlPad(int32_t x, int32_t y);
 	/// Says what a control pad currently is, so holding one describes it and releasing confirms the change
-	void popupControlState(int32_t y);
+	void popupControlState(int32_t x, int32_t y);
 	void popupPage(int32_t page);
+	void popupOctave();
 	void renderControlColumn(RGB image[][kDisplayWidth + kSideBarWidth]);
 	int32_t pageCount();
 
@@ -91,7 +109,8 @@ private:
 	std::array<RGB, kVerticalPages> pageColours;
 	bool initializedNoteOffset = false;
 	/// Which control pad the held-pad description is currently showing, so it is emitted once per press
-	int8_t lastDescribedControlPad = -1;
+	int8_t lastDescribedX = -1;
+	int8_t lastDescribedY = -1;
 };
 
 }; // namespace deluge::gui::ui::keyboard::layout
