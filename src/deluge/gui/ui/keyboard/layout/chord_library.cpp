@@ -174,6 +174,12 @@ const char* KeyboardLayoutChordLibrary::nameForIntervals(NoteSet intervals) {
 	return nullptr;
 }
 
+int32_t KeyboardLayoutChordLibrary::currentPage() {
+	int32_t page = getState().chordLibrary.chordList.chordRowOffset / kDisplayHeight;
+	// An empty library has no pages at all, so clamp to the first one rather than to -1
+	return std::clamp<int32_t>(page, 0, std::max<int32_t>(0, pageCount() - 1));
+}
+
 int32_t KeyboardLayoutChordLibrary::pageCount() {
 	int32_t count = getState().chordLibrary.chordList.chordCount();
 	return std::min<int32_t>(kVerticalPages, (count + kDisplayHeight - 1) / kDisplayHeight);
@@ -190,7 +196,7 @@ void KeyboardLayoutChordLibrary::evaluatePads(PressedPad presses[kMaxNumKeyboard
 
 		PressedPad pressed = presses[idxPress];
 
-		if (pressed.x == kControlColumn || pressed.x == kPageColumn) {
+		if (pressed.x == kControlColumn) {
 			if (pressed.active) {
 				// Holding a control pad names it, so it can be identified without committing to it
 				heldX = pressed.x;
@@ -330,24 +336,13 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 	if (!controlPadActive(x, y)) {
 		return;
 	}
-	if (x == kPageColumn) {
-		if (y >= kVerticalPages) {
-			return;
-		}
+	if (y == kControlRowPage) {
 		if (usingDiatonicQuality()) {
 			char const* text[2] = {"DIAT", "Diatonic: no pages"};
 			display->displayPopup(text);
 		}
-		else if (y >= pageCount()) {
-			char shortText[8];
-			char longText[32];
-			sprintf(shortText, "PG%d", (int)y + 1);
-			sprintf(longText, "No page %d", (int)y + 1);
-			char const* shortLong[2] = {shortText, longText};
-			display->displayPopup(shortLong);
-		}
 		else {
-			popupPage(y);
+			popupPage(currentPage());
 		}
 		return;
 	}
@@ -395,10 +390,13 @@ void KeyboardLayoutChordLibrary::popupControlState(int32_t x, int32_t y) {
 }
 
 bool KeyboardLayoutChordLibrary::controlPadActive(int32_t x, int32_t y) {
+	if (x != kControlColumn) {
+		return false; // The buffer column beside the strip never does anything
+	}
 	// Pages and the chord-grid modes mean nothing while playing single notes, so they are dark and inert in
 	// lead mode - only the octave pads and the way back out stay live
 	if (usingLeadMode()) {
-		return x == kControlColumn && y < kControlRowScaleDegree;
+		return y < kControlRowScaleDegree && y != kControlRowPage;
 	}
 	return true;
 }
@@ -427,14 +425,13 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 	if (!controlPadActive(x, y)) {
 		return;
 	}
-	if (x == kPageColumn) {
-		if (y >= kVerticalPages) {
-			return;
-		}
-		// Diatonic mode has one fixed screen of shapes, so there are no pages to jump between
-		if (!usingDiatonicQuality() && y < pageCount()) {
+	if (y == kControlRowPage) {
+		// Diatonic mode has one fixed screen of shapes, so there are no pages to step through
+		int32_t pages = pageCount();
+		if (!usingDiatonicQuality() && pages > 1) {
+			int32_t page = (currentPage() + 1) % pages;
 			int32_t maxRowOffset = std::max<int32_t>(0, state.chordList.chordCount() - kDisplayHeight);
-			state.chordList.chordRowOffset = std::min<int32_t>(y * kDisplayHeight, maxRowOffset);
+			state.chordList.chordRowOffset = std::min<int32_t>(page * kDisplayHeight, maxRowOffset);
 		}
 	}
 	else if (y == kControlRowLead) {
@@ -475,9 +472,6 @@ void KeyboardLayoutChordLibrary::handleControlPad(int32_t x, int32_t y) {
 		// per-clip state, and reaches the card on the next settings write, like a change made from the menu.
 		chordLibrary.selectNext();
 		state.chordList.refreshFromSettings();
-	}
-	else {
-		return; // A blank pad in the gap between the two groups
 	}
 
 	// Same report either way: held it describes the pad, released it confirms what the pad just did
@@ -688,16 +682,10 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	bool diatonic = usingDiatonicQuality();
 	bool lead = usingLeadMode();
 	int32_t pages = pageCount();
-	int32_t currentPage = state.chordList.chordRowOffset / kDisplayHeight;
 
-	// Page pads run bottom-up, matching the chord rows themselves - chord 0 sits on the bottom row
+	// The buffer column stays dark, so the strip reads as one column with room to miss beside it
 	for (int32_t y = 0; y < kDisplayHeight; ++y) {
-		if (y >= kVerticalPages || diatonic || lead || y >= pages) {
-			image[y][kPageColumn] = colours::black;
-		}
-		else {
-			image[y][kPageColumn] = (y == currentPage) ? pageColours[y] : pageColours[y].forTail();
-		}
+		image[y][kControlBufferColumn] = colours::black;
 	}
 
 	// Blank the whole control column first, so the gap between the mode and play groups stays clean
@@ -715,6 +703,15 @@ void KeyboardLayoutChordLibrary::renderControlColumn(RGB image[][kDisplayWidth +
 	};
 
 	if (!lead) {
+		// One pad steps through the library's pages, wearing the colour of the page it is showing
+		if (diatonic) {
+			image[kControlRowPage][kControlColumn] = colours::grey;
+		}
+		else {
+			RGB pageColour = pageColours[currentPage()];
+			image[kControlRowPage][kControlColumn] = (pages > 1) ? pageColour : pageColour.forTail();
+		}
+
 		// Split mode fixes the columns to scale degrees, so the toggle shows as on but inert
 		image[kControlRowScaleDegree][kControlColumn] =
 		    usingSplitMode() ? colours::grey : toggleColour(colours::darkblue, state.scaleDegreeColumns);
