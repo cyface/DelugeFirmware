@@ -27,10 +27,11 @@ namespace deluge::gui::ui::keyboard::layout {
 
 constexpr int8_t kVerticalPages = ((kUniqueChords + kDisplayHeight - 1) / kDisplayHeight); // Round up division
 
-/// The two rightmost grid columns are control strips, so only the columns to their left play chords.
+/// Only the rightmost grid column is a control strip. The column to its left is dark and inert, a buffer so
+/// that a press sliding off the last playing column cannot land on a control.
 constexpr int32_t kControlColumn = kDisplayWidth - 1; // modes at the top, play controls at the bottom
-constexpr int32_t kPageColumn = kDisplayWidth - 2;    // one pad per page of the active library
-constexpr int32_t kChordLibraryColumns = kPageColumn;
+constexpr int32_t kControlBufferColumn = kDisplayWidth - 2;
+constexpr int32_t kChordLibraryColumns = kControlBufferColumn;
 
 /// Split mode: seven chord columns (one per degree of a seven note scale), a dark divider, then a six column
 /// single-note grid tuned in fourths, like the low strings of a guitar or a bass.
@@ -41,15 +42,15 @@ constexpr int32_t kSplitLeadRowInterval = 5;
 static_assert(kSplitLeadFirstColumn < kChordLibraryColumns, "Split mode needs room for the fourths grid");
 
 /// Control rows, as firmware row indices - row 0 is the BOTTOM of the display, matching the chord rows
-/// themselves. The gap at row 4 separates the mode group from the play group.
+/// themselves. Play controls at the bottom, the page cycler between the two groups, grid modes on top.
 constexpr int32_t kControlRowLead = 0;
 constexpr int32_t kControlRowOctaveDown = 1;
 constexpr int32_t kControlRowOctaveUp = 2;
 constexpr int32_t kControlRowSplit = 3;
+constexpr int32_t kControlRowPage = 4;
 constexpr int32_t kControlRowScaleDegree = 5;
 constexpr int32_t kControlRowDiatonic = 6;
 constexpr int32_t kControlRowLibrary = 7;
-static_assert(kVerticalPages <= kDisplayHeight, "Page column needs one row per page");
 
 /// Keep the bottom-left note low enough that a seven note voicing on top of it still fits in MIDI range
 constexpr int32_t kMaxBottomNote = 96;
@@ -123,6 +124,8 @@ private:
 	/// Says what a control pad currently is, so holding one describes it and releasing confirms the change
 	void popupControlState(int32_t x, int32_t y);
 	void popupPage(int32_t page);
+	/// Which page of the active library the grid is showing
+	int32_t currentPage();
 	void popupOctave();
 	void popupLibraryName();
 	/// Whether a control-strip pad does anything in the current mode

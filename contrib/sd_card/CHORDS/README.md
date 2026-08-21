@@ -19,7 +19,7 @@ the song's key, and the six columns to the right of the dark divider into a sing
 in fourths for soloing. Page one of `Progressions` stacks, from the bottom up, -7b5, 7, -7, -, M,
 M7, 6, M9 - so a ii-V-I is column 2 on the -7 row, column 5 on the 7 row, column 1 on the M7 row.
 The octave pads move the soloing hand; the horizontal encoder scrolls the chord hand by scale
-steps; the vertical encoder and page column still pick the chord page.
+steps; the vertical encoder and the page pad still pick the chord page.
 
 ## Choosing a library
 
@@ -33,6 +33,12 @@ global (not per song) and is remembered in `SETTINGS/CommunityFeatures.XML` as
 
 If a file cannot be read, the keyboard plays the `Default` set instead and holding the library pad
 shows what went wrong, e.g. `BOSSA: BAD NOTES LIST`.
+
+Every control lives in that one rightmost column - library, row mode and column mode on top, then
+the **page** pad in the middle (tap it to step through the library's pages, wrapping at the end; it
+wears the colour of the page it is showing), then split, the octave pair and lead at the bottom. The
+column immediately to its left is always dark: it is a buffer, so a press that slides off the last
+playing column does not change anything.
 
 ## File format
 
@@ -53,8 +59,8 @@ shows what went wrong, e.g. `BOSSA: BAD NOTES LIST`.
 ```
 
 - A `page` is one screen of up to **8** chords, bottom row first. There can be up to **8** pages.
-  A short page is padded with blank rows; the page `name` shows when you jump to it with the
-  page column, and is optional.
+  A short page is padded with blank rows; the page `name` shows when you step to it with the
+  page pad, and is optional.
 - A `chord` has a `name` (shown on the display when you play it, up to about 7 characters is
   sensible) and up to **4** voicings. A chord with no voicings is a blank spacer row. The horizontal encoder steps through the voicings in the
   order given; the first one is the one that plays by default and the one used to colour the
