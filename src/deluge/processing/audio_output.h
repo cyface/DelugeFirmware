@@ -159,4 +159,7 @@ protected:
 	bool modeAllowsMonitoring() const;
 	/// Which output to record from. Only valid when inputChannel is AudioInputChannel::SPECIFIC_OUTPUT.
 	Output* outputRecordingFrom{nullptr};
+	/// Fade-in gain (q31) applied to monitored codec input. Reset to 0 whenever monitoring is not rendering, so
+	/// input monitoring always ramps up smoothly instead of stepping in (avoids the power-on thunk, issue #4517).
+	int32_t monitoringFadeGain{0};
 };

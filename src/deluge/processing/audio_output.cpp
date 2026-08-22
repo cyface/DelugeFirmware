@@ -222,12 +222,24 @@ renderEnvelope:
 		                                                 / static_cast<double>(render.size())));
 		int32_t amplitude = amplitudeAtStart;
 
+		// Ramp the monitored input in over ~46ms (2048 samples) from when monitoring starts, rather than stepping it
+		// in at full level. Any DC offset or settling transient on the input then arrives as an inaudible ramp.
+		constexpr int32_t kMonitoringFadeIncrement = ONE_Q31 / 2048;
+		int32_t fadeGain = monitoringFadeGain;
+
 		for (StereoSample& output_sample : output) {
 			amplitude += amplitude_increment;
+			if (fadeGain < ONE_Q31 - kMonitoringFadeIncrement) {
+				fadeGain += kMonitoringFadeIncrement;
+			}
+			else {
+				fadeGain = ONE_Q31;
+			}
+			int32_t const fadedAmplitude = multiply_32x32_rshift32(amplitude, fadeGain) << 1;
 
 			StereoSample input = {
-			    .l = multiply_32x32_rshift32(input_ptr[0], amplitude) << 2,
-			    .r = multiply_32x32_rshift32(input_ptr[1], amplitude) << 2,
+			    .l = multiply_32x32_rshift32(input_ptr[0], fadedAmplitude) << 2,
+			    .r = multiply_32x32_rshift32(input_ptr[1], fadedAmplitude) << 2,
 			};
 
 			switch (input_channel) {
@@ -259,14 +271,18 @@ renderEnvelope:
 				input_ptr -= SSI_RX_BUFFER_NUM_SAMPLES * NUM_MONO_INPUT_CHANNELS;
 			}
 		}
+		monitoringFadeGain = fadeGain;
 	}
-	else if (modeAllowsMonitoring() && modelStack->song->isOutputActiveInArrangement(this)
-	         && inputChannel == AudioInputChannel::SPECIFIC_OUTPUT && (outputRecordingFrom != nullptr)) {
-		rendered = true;
-		std::byte modelStackMemory[MODEL_STACK_MAX_SIZE];
-		ModelStack* songModelStack = setupModelStackWithSong(modelStackMemory, currentSong);
-		outputRecordingFrom->renderOutput(songModelStack, output, reverbBuffer, reverbAmountAdjust, sideChainHitPending,
-		                                  shouldLimitDelayFeedback, isClipActive);
+	else {
+		monitoringFadeGain = 0; // next time codec input monitoring starts, fade it in again
+		if (modeAllowsMonitoring() && modelStack->song->isOutputActiveInArrangement(this)
+		    && inputChannel == AudioInputChannel::SPECIFIC_OUTPUT && (outputRecordingFrom != nullptr)) {
+			rendered = true;
+			std::byte modelStackMemory[MODEL_STACK_MAX_SIZE];
+			ModelStack* songModelStack = setupModelStackWithSong(modelStackMemory, currentSong);
+			outputRecordingFrom->renderOutput(songModelStack, output, reverbBuffer, reverbAmountAdjust,
+			                                  sideChainHitPending, shouldLimitDelayFeedback, isClipActive);
+		}
 	}
 	return rendered;
 }
