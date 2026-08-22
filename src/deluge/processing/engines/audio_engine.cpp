@@ -283,9 +283,12 @@ void killOneVoice(size_t num_samples) {
 		return a->getPriorityRating() < b->getPriorityRating();
 	});
 	if (it == lowest_priority_voices.end()) {
+		// No synth voices to kill - cull an audio clip instead. Must return here: dereferencing the end iterator
+		// below would be undefined behaviour.
 		if (currentSong) {
 			currentSong->cullAudioClipVoice();
 		}
+		return;
 	}
 
 	const Sound::ActiveVoice& voice = *it;
