@@ -87,4 +87,4 @@ and CV2 source, transpose/pitch bend, gate timing and minimum off-time,
 gate 3/4 reserved for run/clock, and gate kit drums. Link to Ports for
 hardware/standards and to Menu Hierarchies for the settings tree.
 
-Branch: `docs/cv-gate-engine` — fork PR https://github.com/cyface/DelugeFirmware/pull/10 (awaiting review).
+Branch: `docs/cv-gate-engine` — fork PR https://github.com/cyface/DelugeFirmware/pull/10 (reviewed); upstream draft https://github.com/SynthstromAudible/DelugeFirmware/pull/4839 (opened 2026-08-22).
