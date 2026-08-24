@@ -83,10 +83,12 @@
                   : undefined;
 </script>
 
-<!-- Branch: menu action uses only textual label. -->
+<!-- Branch: menu action uses only textual label, which is optional. -->
 {#if step.action === Action.MENU}
   <span class="target-icon" class:hidden={inline}>&nbsp;</span>
-  <span class="target-title">{@html step.label}</span>
+  {#if step.label}
+    <span class="target-title">{@html step.label}</span>
+  {/if}
 <!-- Branch: defensive fallback for invalid control types. -->
 {:else if description.type === ControlType.none}
   <span class="target-icon font-bold text-[#f00]">INVALID</span>
