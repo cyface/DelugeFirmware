@@ -4577,7 +4577,8 @@
           },
           {
             "action": 3,
-            "control": 0
+            "control": 0,
+            "label": "Clone"
           }
         ]
       },
@@ -4597,7 +4598,7 @@
         ]
       }
     ],
-    "description": "Hold the Load (New) button, press the Synth button. Turn the Select (Settings) encoder. Hold the Load (New) button, select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Load (New) button, press the Synth button. Turn the Select (Settings) encoder. Hold the Load (New) button, select \"Clone\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Save synth preset",
@@ -4768,7 +4769,8 @@
           },
           {
             "action": 3,
-            "control": 0
+            "control": 0,
+            "label": "Basic"
           }
         ]
       },
@@ -4788,7 +4790,7 @@
         ]
       }
     ],
-    "description": "Hold the Audition / Section button for row, press the Load (New) button. Press the Select (Settings) encoder. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder, select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Audition / Section button for row, press the Load (New) button. Press the Select (Settings) encoder. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder, select \"Basic\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Multi-sampling",
@@ -4829,7 +4831,8 @@
           },
           {
             "action": 3,
-            "control": 0
+            "control": 0,
+            "label": "Multisamples"
           }
         ]
       },
@@ -4849,7 +4852,7 @@
         ]
       }
     ],
-    "description": "Hold the Audition / Section button for row, press the Load (New) button. Press the Select (Settings) encoder. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder, select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Audition / Section button for row, press the Load (New) button. Press the Select (Settings) encoder. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder, select \"Multisamples\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Single cycle waveforms",
@@ -4890,7 +4893,8 @@
           },
           {
             "action": 3,
-            "control": 0
+            "control": 0,
+            "label": "Single-cycle"
           }
         ]
       },
@@ -4910,7 +4914,7 @@
         ]
       }
     ],
-    "description": "Hold the Audition / Section button for row, press the Load (New) button. Press the Select (Settings) encoder. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder, select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Audition / Section button for row, press the Load (New) button. Press the Select (Settings) encoder. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder, select \"Single-cycle\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "External sound source",
@@ -4941,7 +4945,8 @@
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Input"
       },
       {
         "action": 0,
@@ -4959,7 +4964,7 @@
         ]
       }
     ],
-    "description": "Hold the Shift button, press the Grid pad (lit or unlit). Turn the Select (Settings) encoder. Select an option from the on-screen menu. Press the Play button."
+    "description": "Hold the Shift button, press the Grid pad (lit or unlit). Turn the Select (Settings) encoder. Select \"Input\" from the on-screen menu. Press the Play button."
   },
   {
     "name": "Setup MIDI sequencing of notes",
@@ -5549,7 +5554,8 @@
           },
           {
             "action": 3,
-            "control": 0
+            "control": 0,
+            "label": "Clone"
           }
         ]
       },
@@ -5569,7 +5575,7 @@
         ]
       }
     ],
-    "description": "Hold the Load (New) button, press the Kit button. Turn the Select (Settings) encoder. Hold the Load (New) button, select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Load (New) button, press the Kit button. Turn the Select (Settings) encoder. Hold the Load (New) button, select \"Clone\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Load sample into a kit row",
@@ -5681,7 +5687,8 @@
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Load all"
       },
       {
         "action": 0,
@@ -5706,7 +5713,7 @@
         ]
       }
     ],
-    "description": "Hold the Shift button, press the Kit button. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder. Select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Shift button, press the Kit button. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder. Select \"Load all\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Slice sample",
@@ -5734,7 +5741,8 @@
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Slice"
       },
       {
         "action": 0,
@@ -5742,7 +5750,8 @@
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Num. slices"
       },
       {
         "action": 0,
@@ -5767,7 +5776,7 @@
         ]
       }
     ],
-    "description": "Hold the Shift button. Press the Kit button. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder. Select an option from the on-screen menu. Press the Select (Settings) encoder. Select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Shift button. Press the Kit button. Turn the Select (Settings) encoder. Hold the Select (Settings) encoder. Select \"Slice\" from the on-screen menu. Press the Select (Settings) encoder. Select \"Num. slices\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Setting up choke group",
@@ -5795,7 +5804,8 @@
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Choke"
       },
       {
         "action": 0,
@@ -5813,7 +5823,7 @@
         ]
       }
     ],
-    "description": "Hold the Audition / Section button for row, press the Grid pad (lit or unlit). Turn the Select (Settings) encoder. Select an option from the on-screen menu. Press the Select (Settings) encoder."
+    "description": "Hold the Audition / Section button for row, press the Grid pad (lit or unlit). Turn the Select (Settings) encoder. Select \"Choke\" from the on-screen menu. Press the Select (Settings) encoder."
   },
   {
     "name": "Rename kit row or instrument",
@@ -9155,17 +9165,19 @@
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Recording"
       },
       {
         "action": 3,
-        "control": 0
+        "control": 0,
+        "label": "Count-in bars"
       }
     ],
     "views": [2],
     "firmware": [0],
     "paragraphs": [],
-    "description": "Hold the Shift button, press the Select (Settings) encoder. Select an option from the on-screen menu. Select an option from the on-screen menu."
+    "description": "Hold the Shift button, press the Select (Settings) encoder. Select \"Recording\" from the on-screen menu. Select \"Count-in bars\" from the on-screen menu."
   },
   {
     "name": "Grid View Loop Pads",

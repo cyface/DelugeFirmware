@@ -13,42 +13,96 @@ import { Firmwares } from "../data/firmware.js"
 import { describeShortcutSteps } from "../data/shortcut_descriptions.js"
 
 /**
+ * Split on a separator, ignoring separators nested inside parentheses or
+ * inside a double-quoted label (so 'menu(NONE, "Load all")' stays intact).
+ * Returns the trimmed parts.
+ */
+const splitTopLevel = (str: string, separator: string): string[] => {
+  const parts: string[] = []
+  let current = ""
+  let depth = 0
+  let inQuotes = false
+
+  for (const char of str) {
+    if (char === '"') {
+      inQuotes = !inQuotes
+    } else if (!inQuotes && char === "(") {
+      depth++
+    } else if (!inQuotes && char === ")") {
+      depth--
+    } else if (!inQuotes && depth === 0 && char === separator) {
+      parts.push(current)
+      current = ""
+      continue
+    }
+    current += char
+  }
+  parts.push(current)
+
+  return parts.map((part) => part.trim())
+}
+
+/**
  * Parse a string like 'press(X)' into an action (PRESS) and control (X).
+ * A double-quoted argument is an on-screen label rather than a control, so
+ * 'menu("Clone")' and 'menu(NONE, "Clone")' both describe a menu option, and
+ * 'press(GRID, "Name")' overrides the label of a control that has one.
  * Returns a normalized Step record.
  */
 const parseActionAndControl = (str: string): Step => {
-  const matches = str.match(/^(\w+)\(([^)]+)\)$/)
+  const matches = str.match(/^(\w+)\((.*)\)$/s)
   if (!matches) {
     throw new Error(
       `Shortcut code not in format "action(Control)" in action "${str}"`,
     )
   }
-  const [, actionStr, controlStr] = matches
+  const [, actionStr, argsStr] = matches
   const action = Action[actionStr.toUpperCase() as keyof typeof Action]
-  const control = Control[controlStr.toUpperCase() as keyof typeof Control]
   if (action === undefined) {
     throw new Error(
       `Shortcut action "${actionStr}" not recognized in shortcut "${str}"`,
     )
   }
+
+  let controlStr: string | undefined
+  let label: string | undefined
+
+  for (const arg of splitTopLevel(argsStr, ",")) {
+    const quotedLabel = arg.match(/^"(.*)"$/s)
+
+    if (quotedLabel) {
+      if (label !== undefined) {
+        throw new Error(`More than one label given in shortcut "${str}"`)
+      }
+      ;[, label] = quotedLabel
+      continue
+    }
+
+    if (controlStr !== undefined) {
+      throw new Error(`More than one control given in shortcut "${str}"`)
+    }
+    controlStr = arg
+  }
+
+  // A step carrying only a label (a menu option) targets no hardware control.
+  const control =
+    controlStr === undefined
+      ? Control.NONE
+      : Control[controlStr.toUpperCase() as keyof typeof Control]
+
   if (control === undefined) {
     throw new Error(
       `Shortcut control "${controlStr}" not recognized in shortcut "${str}"`,
     )
   }
-  return {
-    action,
-    control,
-  }
+
+  return label === undefined ? { action, control } : { action, control, label }
 }
 
 // Returns a SubstepContainer parsed from a '+'-joined step string.
 const parseSubstepContainer = (s: string): SubstepContainer => {
   return {
-    substeps: s
-      .split("+")
-      .map((s) => s.trim())
-      .map(parseActionAndControl),
+    substeps: splitTopLevel(s, "+").map(parseActionAndControl),
   }
 }
 
@@ -58,16 +112,13 @@ const parseSubstepContainer = (s: string): SubstepContainer => {
  * Returns a normalized list of StepOrSubstep values.
  */
 const parseSteps = (str: string): StepOrSubstep[] => {
-  return str
-    .split(",")
-    .map((s) => s.trim())
-    .map((s) => {
-      if (s.includes("+")) {
-        return parseSubstepContainer(s)
-      } else {
-        return parseActionAndControl(s)
-      }
-    })
+  return splitTopLevel(str, ",").map((s) => {
+    if (splitTopLevel(s, "+").length > 1) {
+      return parseSubstepContainer(s)
+    } else {
+      return parseActionAndControl(s)
+    }
+  })
 }
 
 // Returns text normalized for whitespace-insensitive comparisons.

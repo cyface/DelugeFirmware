@@ -104,6 +104,10 @@ const punctuateSentence = (sentence: string) => {
 const describeStep = (step: Step) => {
   const actionDescription = shortcutActionDescriptions[step.action]
 
+  if (step.action === Action.MENU && step.label) {
+    return `select "${step.label}" from the on-screen menu`
+  }
+
   if ("sentence" in actionDescription) {
     return actionDescription.sentence
   }

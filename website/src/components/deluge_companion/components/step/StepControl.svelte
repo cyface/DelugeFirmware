@@ -83,11 +83,15 @@
                   : undefined;
 </script>
 
-<!-- Branch: menu action uses only textual label, which is optional. -->
+<!-- Branch: menu action targets no control, so it renders the on-screen
+     option as a display token. Steps written without one render bare. -->
 {#if step.action === Action.MENU}
   <span class="target-icon" class:hidden={inline}>&nbsp;</span>
   {#if step.label}
-    <span class="target-title">{@html step.label}</span>
+    <span
+      class="target-title menu-label rounded bg-black/85 px-2 font-mono text-white"
+      >{step.label}</span
+    >
   {/if}
 <!-- Branch: defensive fallback for invalid control types. -->
 {:else if description.type === ControlType.none}
@@ -152,14 +156,6 @@
     ><Knob /></span
   >
   <span class="target-title uppercase">{@html description.title}</span>
-<!-- Branch: display control renders monospace display token. -->
-{:else if description.type === ControlType.display}
-  <span class="target-icon" class:hidden={inline}>&nbsp;</span>
-  <span class="target-title rounded bg-[var(--sl-color-black)]/85 px-2 font-mono text-[var(--sl-color-white)]"
-    >{step.label}</span
-  >
-  <span class="target-title font-mono uppercase">{@html description.title}</span
-  >
 <!-- Branch: external MIDI control. -->
 {:else if description.type === ControlType.external}
   <span class="target-icon text-[var(--sl-color-gray-4)]" class:hidden={inline}
@@ -186,6 +182,12 @@
     white-space: nowrap;
     grid-area: target-title;
     align-self: baseline;
+  }
+
+  /* Menu options are screen text: a fixed dark token in both themes, keeping
+     the firmware's own casing rather than the uppercase control styling. */
+  .menu-label {
+    text-transform: none;
   }
 
   .target-icon :global(svg) {

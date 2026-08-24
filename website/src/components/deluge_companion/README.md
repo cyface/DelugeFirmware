@@ -38,6 +38,21 @@ This folder contains the interactive Deluge Companion app that is embedded in th
   - Filters are AND-combined across active facet stores.
   - Availability sets are recalculated from the currently valid result-space.
 
+## Shortcut step syntax
+
+Steps live in ` ```shortcut ` blocks in `data/shortcuts/**/*.md`:
+
+- A step is `action(CONTROL)`, e.g. `press(SYNTH)`. Actions come from
+  `data/actions.ts`, controls from `data/targets.ts`.
+- `,` separates sequential steps; `+` joins steps held together, e.g.
+  `hold(SHIFT) + press(KIT), turn(SELECT)`.
+- A double-quoted argument is an on-screen label rather than a control:
+  `menu("Load all")` describes a menu option and needs no control, while
+  `press(GRID, "Name")` overrides the label of a control that has one. Use the
+  firmware's own wording from `src/deluge/gui/l10n/english.json`.
+- Separators inside parentheses or inside a quoted label are not split on, so
+  labels may contain `,` and `+`.
+
 ## Hardware preview behavior
 
 - `preview_store.ts` coordinates cross-card UI state.

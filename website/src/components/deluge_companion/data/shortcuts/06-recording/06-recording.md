@@ -102,7 +102,7 @@ press(GRID_UNLIT), press(KIT), turn(TEMPO)
 #OFFICIAL #SESSION
 
 ```shortcut
-hold(SHIFT) + press(SELECT), menu(NONE), menu(NONE)
+hold(SHIFT) + press(SELECT), menu("Recording"), menu("Count-in bars")
 ```
 
 # Grid View Loop Pads
