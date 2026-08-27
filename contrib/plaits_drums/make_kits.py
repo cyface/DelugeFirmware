@@ -221,6 +221,7 @@ def row(
 # (131 Hz) - transposes below pull each row into the classic register. The hi-hat rows were fitted
 # against real 808 hat samples: the model needs Tone ~0.95 (band-pass up near 8 kHz) and f0 ~414 Hz
 # (transpose +8) to put its energy at 4-16 kHz like the real thing; lower Tone sounds like a bell.
+# The cymbal / ride rows use the ring-modulated "hihat2" model, which gets closer to a real cymbal.
 KIT_808 = [
     row("KICK", "808kick", tone=0.35, decay=0.55, snap=0.30, transpose=-3),
     row("KICK LONG", "808kick", tone=0.25, decay=0.85, snap=0.15, transpose=-5),
@@ -239,7 +240,7 @@ KIT_808 = [
         choke=True,
     ),
     row("HAT OPEN", "hihat", tone=0.95, decay=0.65, snap=0.3, transpose=8, choke=True),
-    row("CYMBAL", "hihat", tone=0.85, decay=0.7, snap=0.3, transpose=17),
+    row("CYMBAL", "hihat2", tone=0.9, decay=0.9, snap=0.7, transpose=-5),
 ]
 
 KIT_909 = [
@@ -260,7 +261,7 @@ KIT_909 = [
         choke=True,
     ),
     row("HAT OPEN", "hihat", tone=0.95, decay=0.6, snap=0.45, transpose=8, choke=True),
-    row("RIDE", "hihat", tone=0.85, decay=0.8, snap=0.4, transpose=8),
+    row("RIDE", "hihat2", tone=0.65, decay=0.9, snap=0.3, transpose=16),
 ]
 
 

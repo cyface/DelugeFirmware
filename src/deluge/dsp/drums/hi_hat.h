@@ -27,11 +27,12 @@
 // 808 HH, with a few extra parameters to push things to the CY territory...
 // The template parameter MetallicNoiseSource allows another kind of "metallic
 // noise" to be used, for results which are more similar to KR-55 or FM hi-hats.
-// (plaits/dsp/drums/hi_hat.h - the RingModNoise variant is not ported.)
+// (plaits/dsp/drums/hi_hat.h)
 
 #pragma once
 
 #include "dsp/drums/dsp.h"
+#include "dsp/drums/oscillator.h"
 #include "dsp/drums/stmlib.h"
 #include <algorithm>
 #include <cmath>
@@ -81,6 +82,55 @@ public:
 
 private:
 	uint32_t phase_[6];
+};
+
+/// Three ring-modulated square x saw pairs - the "metallic" noise of Plaits' second hi-hat (its AUX output).
+/// Needs two scratch buffers of `size` floats; the render block is capped at kMaxBlockSize samples.
+class RingModNoise {
+public:
+	static constexpr size_t kMaxBlockSize = 128;
+
+	void Init() {
+		for (int i = 0; i < 6; ++i) {
+			oscillator_[i].Init();
+		}
+	}
+
+	void Render(float f0, float* out, size_t size) {
+		static float temp_1[kMaxBlockSize];
+		static float temp_2[kMaxBlockSize];
+		if (size > kMaxBlockSize) {
+			size = kMaxBlockSize;
+		}
+
+		// Plaits wrote this with f0 in cycles-per-sample at 48 kHz; evaluate it at that scale so the pair
+		// frequencies (and therefore the ring-mod partials) are the same at the Deluge's 44.1 kHz.
+		const float f0_at_48k = f0 * (kSampleRate / 48000.0f);
+		const float ratio = f0_at_48k / (0.01f + f0_at_48k);
+		const float f1a = 200.0f / kSampleRate * ratio;
+		const float f1b = 7530.0f / kSampleRate * ratio;
+		const float f2a = 510.0f / kSampleRate * ratio;
+		const float f2b = 8075.0f / kSampleRate * ratio;
+		const float f3a = 730.0f / kSampleRate * ratio;
+		const float f3b = 10500.0f / kSampleRate * ratio;
+		const float f[3][2] = {{f1a, f1b}, {f2a, f2b}, {f3a, f3b}};
+
+		std::fill(&out[0], &out[size], 0.0f);
+
+		for (int i = 0; i < 3; ++i) {
+			RenderPair(&oscillator_[2 * i], f[i], temp_1, temp_2, out, size);
+		}
+	}
+
+private:
+	void RenderPair(Oscillator* osc, const float* f, float* temp_1, float* temp_2, float* out, size_t size) {
+		osc[0].Render<OSCILLATOR_SHAPE_SQUARE>(f[0], 0.5f, temp_1, size);
+		osc[1].Render<OSCILLATOR_SHAPE_SAW>(f[1], 0.5f, temp_2, size);
+		while (size--) {
+			*out++ += *temp_1++ * *temp_2++;
+		}
+	}
+	Oscillator oscillator_[6];
 };
 
 class SwingVCA {

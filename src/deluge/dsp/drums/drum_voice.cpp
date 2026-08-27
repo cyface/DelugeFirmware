@@ -75,6 +75,9 @@ void DrumVoice::init(DrumModel model, uint8_t velocity) {
 	case DrumModel::SYNTH_SNARE:
 		model_state_.synthSnare.Init();
 		break;
+	case DrumModel::HI_HAT_2:
+		model_state_.hiHat2.Init();
+		break;
 	}
 	retrigger(velocity);
 }
@@ -114,6 +117,9 @@ bool DrumVoice::render(float* out, int32_t numSamples, float f0, float tone, flo
 		break;
 	case DrumModel::SYNTH_SNARE:
 		model_state_.synthSnare.Render(false, trigger, accent_, f0, tone, decay, harmonics, out, size);
+		break;
+	case DrumModel::HI_HAT_2:
+		model_state_.hiHat2.Render(false, trigger, accent_, f0, tone, decay, harmonics, out, size);
 		break;
 	}
 

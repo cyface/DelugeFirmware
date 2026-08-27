@@ -789,6 +789,8 @@ char const* drumModelToString(DrumModel model) {
 		return "909kick";
 	case DrumModel::SYNTH_SNARE:
 		return "909snare";
+	case DrumModel::HI_HAT_2:
+		return "hihat2";
 	default:
 		__builtin_unreachable();
 	}
@@ -806,6 +808,9 @@ DrumModel stringToDrumModel(char const* string) {
 	}
 	if (!strcmp(string, "909snare")) {
 		return DrumModel::SYNTH_SNARE;
+	}
+	if (!strcmp(string, "hihat2")) {
+		return DrumModel::HI_HAT_2;
 	}
 	return DrumModel::ANALOG_KICK;
 }

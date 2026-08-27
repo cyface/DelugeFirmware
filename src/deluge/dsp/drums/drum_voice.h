@@ -60,6 +60,7 @@ private:
 		HiHat<SquareNoise, SwingVCA, true, false> hiHat;
 		SyntheticBassDrum synthKick;
 		SyntheticSnareDrum synthSnare;
+		HiHat<RingModNoise, LinearVCA, false, true> hiHat2;
 	} model_state_;
 	Overdrive overdrive_;
 };
