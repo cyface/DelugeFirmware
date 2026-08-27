@@ -34,12 +34,33 @@ namespace deluge::gui::menu_item {
 class HorizontalMenu;
 class HorizontalMenuGroup;
 class HorizontalMenuContainer;
+namespace osc {
+class PulseWidth;
+namespace source {
+class Feedback;
+}
+namespace drum {
+class Tone;
+class Decay;
+class Snap;
+} // namespace drum
+} // namespace osc
 } // namespace deluge::gui::menu_item
 
 extern gui::menu_item::patched_param::IntegerNonFM noiseMenu;
 extern gui::menu_item::osc::Sync oscSyncMenu;
 extern gui::menu_item::osc::source::WaveIndex source0WaveIndexMenu;
 extern gui::menu_item::osc::source::WaveIndex source1WaveIndexMenu;
+extern gui::menu_item::osc::PulseWidth osc0PulseWidthMenu;
+extern gui::menu_item::osc::PulseWidth osc1PulseWidthMenu;
+extern gui::menu_item::osc::source::Feedback source0FeedbackMenu;
+extern gui::menu_item::osc::source::Feedback source1FeedbackMenu;
+extern gui::menu_item::osc::drum::Tone osc0DrumToneMenu;
+extern gui::menu_item::osc::drum::Tone osc1DrumToneMenu;
+extern gui::menu_item::osc::drum::Decay osc0DrumDecayMenu;
+extern gui::menu_item::osc::drum::Decay osc1DrumDecayMenu;
+extern gui::menu_item::osc::drum::Snap osc0DrumSnapMenu;
+extern gui::menu_item::osc::drum::Snap osc1DrumSnapMenu;
 
 extern gui::menu_item::sample::Start sample0StartMenu;
 extern gui::menu_item::sample::Start sample1StartMenu;

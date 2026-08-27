@@ -16,6 +16,7 @@
  */
 
 #include "model/voice/voice_unison_part_source.h"
+#include "dsp/drums/drum_voice.h"
 #include "dsp/dx/dx7note.h"
 #include "dsp/dx/engine.h"
 #include "memory/general_memory_allocator.h"
@@ -75,6 +76,22 @@ bool VoiceUnisonPartSource::noteOn(Voice* voice, Source* source, VoiceSamplePlay
 		DxPatch* patch = source->ensureDxPatch();
 		dxVoice->init(*patch, voice->noteCodeAfterArpeggiation, velocity);
 	}
+	else if (synthMode != SynthMode::FM && source->oscType == OscType::DRUM) [[unlikely]] {
+		if (drumVoice == nullptr) {
+			drumVoice = deluge::dsp::drums::solicitDrumVoice();
+			if (drumVoice == nullptr) {
+				return false;
+			}
+			drumVoice->init(source->drumModel, velocity);
+		}
+		else if (drumVoice->model() != source->drumModel) {
+			drumVoice->init(source->drumModel, velocity);
+		}
+		else {
+			// Restarting a voice that's still ringing - hit it again rather than resetting it
+			drumVoice->retrigger(velocity);
+		}
+	}
 	else {
 		if (oscRetriggerPhase != 0xFFFFFFFF) {
 			oscPos = getOscInitialPhaseForZero(source->oscType) + oscRetriggerPhase;
@@ -99,6 +116,11 @@ void VoiceUnisonPartSource::unassign(bool deletingSong) {
 	if (dxVoice != nullptr) {
 		dxEngine->dxVoiceUnassigned(dxVoice);
 		dxVoice = nullptr;
+	}
+
+	if (drumVoice != nullptr) {
+		deluge::dsp::drums::drumVoiceUnassigned(drumVoice);
+		drumVoice = nullptr;
 	}
 
 	if (livePitchShifter != nullptr) {

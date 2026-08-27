@@ -1374,7 +1374,9 @@ PatchCableAcceptance Sound::maySourcePatchToParam(PatchSource s, uint8_t p, Para
 
 	case params::LOCAL_CARRIER_0_FEEDBACK:
 		if (synthMode != SynthMode::FM) {
-			return PatchCableAcceptance::DISALLOWED;
+			// Doubles as the drum model's third macro
+			return (sources[0].oscType == OscType::DRUM) ? PatchCableAcceptance::ALLOWED
+			                                             : PatchCableAcceptance::DISALLOWED;
 		}
 		return (isSourceActiveEver(0, paramManager)
 		        && patchedParams->params[params::LOCAL_CARRIER_0_FEEDBACK].containsSomething(-2147483648))
@@ -1398,7 +1400,8 @@ PatchCableAcceptance Sound::maySourcePatchToParam(PatchSource s, uint8_t p, Para
 
 	case params::LOCAL_CARRIER_1_FEEDBACK:
 		if (synthMode != SynthMode::FM) {
-			return PatchCableAcceptance::DISALLOWED;
+			return (sources[1].oscType == OscType::DRUM) ? PatchCableAcceptance::ALLOWED
+			                                             : PatchCableAcceptance::DISALLOWED;
 		}
 		return (isSourceActiveEver(1, paramManager)
 		        && patchedParams->params[params::LOCAL_CARRIER_1_FEEDBACK].containsSomething(-2147483648))
@@ -1948,7 +1951,8 @@ bool Sound::allowNoteTails(ModelStackWithSoundFlags* modelStack, bool disregardS
 
 		anyActiveSources = sourceEverActive || anyActiveSources;
 
-		if (sourceEverActive
+		// Drum models are one-shots: like a play-once sample they ignore note-offs and end on their own.
+		if (sourceEverActive && sources[s].oscType != OscType::DRUM
 		    && (sources[s].oscType != OscType::SAMPLE || sources[s].repeatMode != SampleRepeatMode::ONCE
 		        || (!disregardSampleLoop && sources[s].hasAnyLoopEndPoint()))) {
 			return true;
@@ -3378,6 +3382,10 @@ Error Sound::readSourceFromFile(Deserializer& reader, int32_t s, ParamManagerFor
 			source->sampleControls.reversed = reader.readTagOrAttributeValueInt();
 			reader.exitTag("reversed");
 		}
+		else if (!strcmp(tagName, "drumModel")) {
+			source->drumModel = stringToDrumModel(reader.readTagOrAttributeValue());
+			reader.exitTag("drumModel");
+		}
 		else if (!strcmp(tagName, "dx7patch")) {
 			DxPatch* patch = source->ensureDxPatch();
 			int len = reader.readTagOrAttributeValueHexBytes(patch->params, 156);
@@ -3730,6 +3738,10 @@ void Sound::writeSourceToFile(Serializer& writer, int32_t s, char const* tagName
 			else {
 				goto justCloseTag;
 			}
+		}
+		else if (source->oscType == OscType::DRUM && synthMode != SynthMode::FM) {
+			writer.writeAttribute("drumModel", drumModelToString(source->drumModel));
+			goto justCloseTag;
 		}
 		else if (source->oscType == OscType::DX7
 		         && synthMode != SynthMode::FM) { // Don't combine this with the above "if" - there's an "else" below

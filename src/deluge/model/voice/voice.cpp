@@ -18,6 +18,7 @@
 #include "model/voice/voice.h"
 #include "arm_neon_shim.h"
 #include "definitions_cxx.hpp"
+#include "dsp/drums/drum_voice.h"
 #include "dsp/dx/engine.h"
 #include "dsp/filter/filter_set.h"
 #include "dsp/oscillators/sine_osc.h"
@@ -46,6 +47,7 @@
 #include "storage/multi_range/multisample_range.h"
 #include "storage/storage_manager.h"
 #include "storage/wave_table/wave_table.h"
+#include <algorithm>
 
 #include "dsp/oscillators/basic_waves.h"
 #include "dsp/oscillators/oscillator.h"
@@ -2444,8 +2446,55 @@ dontUseCache: {}
 					oscBuffer[i] += multiply_32x32_rshift32(uniBuf[i], sourceAmplitudeNow) << 6;
 				}
 			}
+		}
+		else if (sound.sources[s].oscType == OscType::DRUM) {
+			// Plaits drum model. Rendered in float, then scaled into the osc buffer exactly like the basic
+			// oscillators (q31 sample × amplitude << 4).
+			static float drumBuf[SSI_TX_BUFFER_NUM_SAMPLES] __attribute__((aligned(CACHE_LINE_SIZE)));
 
-			// Or regular wave
+			deluge::dsp::drums::DrumVoice* drumVoice = unisonParts[u].sources[s].drumVoice;
+			if (drumVoice == nullptr) [[unlikely]] {
+				goto instantUnassign;
+			}
+
+			// phaseIncrement is cycles-per-sample in 32-bit fixed point, which is exactly the models' f0 unit.
+			const float f0 = static_cast<float>(phaseIncrement) * (1.0f / 4294967296.0f)
+			                 * deluge::dsp::drums::drumModelPitchScale(sound.sources[s].drumModel);
+
+			// Macro params, normalised to 0..1. Pulse width is a "half precision" param (0..INT32_MAX);
+			// wave index and feedback are full range.
+			const float tone =
+			    static_cast<float>(std::max<int32_t>(paramFinalValues[params::LOCAL_OSC_A_PHASE_WIDTH + s], 0))
+			    * (1.0f / 2147483648.0f);
+			const float decay =
+			    (static_cast<float>(paramFinalValues[params::LOCAL_OSC_A_WAVE_INDEX + s]) + 2147483648.0f)
+			    * (1.0f / 4294967296.0f);
+			const float snap =
+			    (static_cast<float>(paramFinalValues[params::LOCAL_CARRIER_0_FEEDBACK + s]) + 2147483648.0f)
+			    * (1.0f / 4294967296.0f);
+
+			bool active = drumVoice->render(drumBuf, numSamples, f0, tone, decay, snap);
+			if (!active) {
+				goto instantUnassign;
+			}
+
+			int32_t sourceAmplitudeNow = sourceAmplitude << 4;
+			const int32_t amplitudeIncrementNow = amplitudeIncrement << 4;
+			for (int32_t i = 0; i < numSamples; i++) {
+				sourceAmplitudeNow += amplitudeIncrementNow;
+				const float clamped = std::clamp(drumBuf[i], -1.0f, 1.0f);
+				const int32_t sampleQ31 = static_cast<int32_t>(clamped * 2147483520.0f);
+				const int32_t amplified = multiply_32x32_rshift32(sampleQ31, sourceAmplitudeNow);
+				// amplitudeL/R are equal-gain unless unison stereo spread is on, so this also covers a stereo
+				// buffer that's only stereo because the other source is a stereo sample.
+				if (stereoBuffer) {
+					oscBuffer[(i << 1)] += multiply_32x32_rshift32(amplified, amplitudeL) << 2;
+					oscBuffer[(i << 1) + 1] += multiply_32x32_rshift32(amplified, amplitudeR) << 2;
+				}
+				else {
+					oscBuffer[i] += amplified;
+				}
+			}
 		}
 		else [[likely]] {
 			uint32_t oscSyncPosThisUnison;

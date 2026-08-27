@@ -62,6 +62,7 @@ SettingToggle menuDisplayNornsLayout(RuntimeFeatureSettingType::DisplayNornsLayo
 ShiftIsSticky menuShiftIsSticky{};
 SettingToggle menuLightShiftLed(RuntimeFeatureSettingType::LightShiftLed);
 SettingToggle menuEnableDX7Engine(RuntimeFeatureSettingType::EnableDX7Engine);
+SettingToggle menuEnableDrumModels(RuntimeFeatureSettingType::EnableDrumModels);
 EmulatedDisplay menuEmulatedDisplay{};
 SettingToggle menuEnableKeyboardViewSidebarMenuExit(RuntimeFeatureSettingType::EnableKeyboardViewSidebarMenuExit);
 SettingToggle menuEnableLaunchEventPlayhead(RuntimeFeatureSettingType::EnableLaunchEventPlayhead);
@@ -91,6 +92,7 @@ std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettin
     &menuShiftIsSticky,
     &menuLightShiftLed,
     &menuEnableDX7Engine,
+    &menuEnableDrumModels,
     &menuEmulatedDisplay,
     &menuEnableKeyboardViewSidebarMenuExit,
     &menuEnableLaunchEventPlayhead,

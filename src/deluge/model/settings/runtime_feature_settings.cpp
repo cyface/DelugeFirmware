@@ -174,6 +174,10 @@ void RuntimeFeatureSettings::init() {
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableDX7Engine], STRING_FOR_COMMUNITY_FEATURE_DX7_ENGINE,
 	                  "EnableDX7Engine", RuntimeFeatureStateToggle::Off);
 
+	// EnableDrumModels
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableDrumModels], STRING_FOR_COMMUNITY_FEATURE_DRUM_MODELS,
+	                  "EnableDrumModels", RuntimeFeatureStateToggle::Off);
+
 	// EmulatedDisplay
 	SetupEmulatedDisplaySetting(settings[RuntimeFeatureSettingType::EmulatedDisplay],
 	                            STRING_FOR_COMMUNITY_FEATURE_EMULATED_DISPLAY, "emulatedDisplay",
