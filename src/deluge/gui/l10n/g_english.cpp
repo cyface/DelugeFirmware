@@ -1012,6 +1012,7 @@ PLACE_SDRAM_DATA Language english{
         {STRING_FOR_DRUM_MODEL_HI_HAT, "Hi-hat"},
         {STRING_FOR_DRUM_MODEL_909_KICK, "909 Kick"},
         {STRING_FOR_DRUM_MODEL_909_SNARE, "909 Snare"},
+        {STRING_FOR_DRUM_MODEL_HI_HAT_2, "Hi-hat 2"},
         {STRING_FOR_DRUM_TONE, "Tone"},
         {STRING_FOR_DRUM_SNAPPY, "Snappy"},
         {STRING_FOR_DRUM_NOISE, "Noise"},

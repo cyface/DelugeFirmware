@@ -41,6 +41,7 @@ public:
 		    l10n::getView(STRING_FOR_DRUM_MODEL_HI_HAT),    //<
 		    l10n::getView(STRING_FOR_DRUM_MODEL_909_KICK),  //<
 		    l10n::getView(STRING_FOR_DRUM_MODEL_909_SNARE), //<
+		    l10n::getView(STRING_FOR_DRUM_MODEL_HI_HAT_2),  //<
 		};
 	}
 

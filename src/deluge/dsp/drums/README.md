@@ -10,7 +10,8 @@ MIT-licensed; each ported file keeps its original copyright header.
 | --- | --- |
 | `analog_bass_drum.h` | `plaits/dsp/drums/analog_bass_drum.h` (808 bass drum) |
 | `analog_snare_drum.h` | `plaits/dsp/drums/analog_snare_drum.h` (808 snare drum) |
-| `hi_hat.h` | `plaits/dsp/drums/hi_hat.h` (808 hi-hat; the `RingModNoise` variant is not ported) |
+| `hi_hat.h` | `plaits/dsp/drums/hi_hat.h` (808 hi-hat and the ring-modulated "Hi-hat 2" variant) |
+| `oscillator.h` | `plaits/dsp/oscillator/oscillator.h` + `stmlib/dsp/polyblep.h`, saw/square shapes only |
 | `synthetic_bass_drum.h` | `plaits/dsp/drums/synthetic_bass_drum.h` (909-style bass drum) |
 | `synthetic_snare_drum.h` | `plaits/dsp/drums/synthetic_snare_drum.h` (909-style snare drum) |
 | `overdrive.h` | `plaits/dsp/fx/overdrive.h` |
