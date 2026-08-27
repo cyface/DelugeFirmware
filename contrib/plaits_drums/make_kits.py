@@ -218,7 +218,9 @@ def row(
 
 # Rows are listed bottom-up on the grid, so the kick goes first.
 # Tuning notes (kit default note C3 = 261.6 Hz): kicks play at note/4 (65 Hz), snares at note/2
-# (131 Hz), hi-hat nominal f0 is 207 Hz - transposes below pull each row into the classic register.
+# (131 Hz) - transposes below pull each row into the classic register. The hi-hat rows were fitted
+# against real 808 hat samples: the model needs Tone ~0.95 (band-pass up near 8 kHz) and f0 ~414 Hz
+# (transpose +8) to put its energy at 4-16 kHz like the real thing; lower Tone sounds like a bell.
 KIT_808 = [
     row("KICK", "808kick", tone=0.35, decay=0.55, snap=0.30, transpose=-3),
     row("KICK LONG", "808kick", tone=0.25, decay=0.85, snap=0.15, transpose=-5),
@@ -230,16 +232,14 @@ KIT_808 = [
     row(
         "HAT CLOSED",
         "hihat",
-        tone=0.55,
-        decay=0.20,
-        snap=0.20,
-        transpose=-4,
+        tone=0.95,
+        decay=0.15,
+        snap=0.15,
+        transpose=8,
         choke=True,
     ),
-    row(
-        "HAT OPEN", "hihat", tone=0.55, decay=0.65, snap=0.20, transpose=-4, choke=True
-    ),
-    row("CYMBAL", "hihat", tone=0.35, decay=0.95, snap=0.35, transpose=-10),
+    row("HAT OPEN", "hihat", tone=0.95, decay=0.65, snap=0.3, transpose=8, choke=True),
+    row("CYMBAL", "hihat", tone=0.8, decay=0.7, snap=0.4, transpose=8),
 ]
 
 KIT_909 = [
@@ -253,16 +253,14 @@ KIT_909 = [
     row(
         "HAT CLOSED",
         "hihat",
-        tone=0.65,
+        tone=0.95,
         decay=0.15,
         snap=0.45,
-        transpose=-2,
+        transpose=8,
         choke=True,
     ),
-    row(
-        "HAT OPEN", "hihat", tone=0.65, decay=0.60, snap=0.45, transpose=-2, choke=True
-    ),
-    row("RIDE", "hihat", tone=0.50, decay=0.90, snap=0.60, transpose=-8),
+    row("HAT OPEN", "hihat", tone=0.95, decay=0.6, snap=0.45, transpose=8, choke=True),
+    row("RIDE", "hihat", tone=0.85, decay=0.8, snap=0.4, transpose=8),
 ]
 
 

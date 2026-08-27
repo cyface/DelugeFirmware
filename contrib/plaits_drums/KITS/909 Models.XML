@@ -880,7 +880,7 @@
 			<osc1>
 				<type>drum</type>
 				<drumModel>hihat</drumModel>
-				<transpose>-2</transpose>
+				<transpose>8</transpose>
 				<cents>0</cents>
 				<retrigPhase>-1</retrigPhase>
 			</osc1>
@@ -918,7 +918,7 @@
 				<portamento>0x80000000</portamento>
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
-				<oscAPulseWidth>0x53333333</oscAPulseWidth>
+				<oscAPulseWidth>0x79999999</oscAPulseWidth>
 				<oscAWavetablePosition>0xA6666666</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
@@ -1000,7 +1000,7 @@
 			<osc1>
 				<type>drum</type>
 				<drumModel>hihat</drumModel>
-				<transpose>-2</transpose>
+				<transpose>8</transpose>
 				<cents>0</cents>
 				<retrigPhase>-1</retrigPhase>
 			</osc1>
@@ -1038,7 +1038,7 @@
 				<portamento>0x80000000</portamento>
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
-				<oscAPulseWidth>0x53333333</oscAPulseWidth>
+				<oscAPulseWidth>0x79999999</oscAPulseWidth>
 				<oscAWavetablePosition>0x19999999</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
@@ -1120,7 +1120,7 @@
 			<osc1>
 				<type>drum</type>
 				<drumModel>hihat</drumModel>
-				<transpose>-8</transpose>
+				<transpose>8</transpose>
 				<cents>0</cents>
 				<retrigPhase>-1</retrigPhase>
 			</osc1>
@@ -1158,8 +1158,8 @@
 				<portamento>0x80000000</portamento>
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
-				<oscAPulseWidth>0x40000000</oscAPulseWidth>
-				<oscAWavetablePosition>0x66666666</oscAWavetablePosition>
+				<oscAPulseWidth>0x6CCCCCCC</oscAPulseWidth>
+				<oscAWavetablePosition>0x4CCCCCCC</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
@@ -1187,7 +1187,7 @@
 				<modulator1Feedback>0x80000000</modulator1Feedback>
 				<modulator2Amount>0x80000000</modulator2Amount>
 				<modulator2Feedback>0x80000000</modulator2Feedback>
-				<carrier1Feedback>0x19999999</carrier1Feedback>
+				<carrier1Feedback>0xE6666666</carrier1Feedback>
 				<carrier2Feedback>0x80000000</carrier2Feedback>
 				<modFXRate>0x00000000</modFXRate>
 				<modFXDepth>0x00000000</modFXDepth>
