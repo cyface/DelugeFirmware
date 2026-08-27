@@ -79,7 +79,7 @@
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
 				<oscAPulseWidth>0x39999999</oscAPulseWidth>
-				<oscAWavetablePosition>0x00000000</oscAWavetablePosition>
+				<oscAWavetablePosition>0x33333332</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
@@ -199,7 +199,7 @@
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
 				<oscAPulseWidth>0x4CCCCCCC</oscAPulseWidth>
-				<oscAWavetablePosition>0xD9999999</oscAWavetablePosition>
+				<oscAWavetablePosition>0x0CCCCCCC</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
@@ -559,7 +559,7 @@
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
 				<oscAPulseWidth>0x26666666</oscAPulseWidth>
-				<oscAWavetablePosition>0x19999999</oscAWavetablePosition>
+				<oscAWavetablePosition>0x3FFFFFFF</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
@@ -679,7 +679,7 @@
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
 				<oscAPulseWidth>0x26666666</oscAPulseWidth>
-				<oscAWavetablePosition>0x0CCCCCCC</oscAWavetablePosition>
+				<oscAWavetablePosition>0x33333332</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
@@ -799,7 +799,7 @@
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
 				<oscAPulseWidth>0x26666666</oscAPulseWidth>
-				<oscAWavetablePosition>0x00000000</oscAWavetablePosition>
+				<oscAWavetablePosition>0x26666666</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
