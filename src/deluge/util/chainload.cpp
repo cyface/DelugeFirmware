@@ -66,15 +66,14 @@ void chainload_from_buf(uint8_t* buffer, int buf_size) {
 	L2CacheCleanInvalidateAll();
 	L2CacheDisable();
 
-	// Jump to the chainloader
-	asm volatile("mov r0,%0\n\t"
-	             "mov r1,%1\n\t"
-	             "mov r2,%2\n\t"
-	             "mov r3,%3\n\t"
-	             "mov r4,%4\n\t"
-	             "blx deluge_chainload"
-	             :
-	             : "r"(user_code_start), "r"(code_size), "r"(user_code_exec), "r"(buffer), "r"(funcbuf)
-	             : "r0", "r1", "r2", "r3", "r4");
+	// Jump to the chainloader. Bind the arguments to r0-r4 directly: the previous "five inputs plus
+	// r0-r4 clobbered" form needed ten free registers and fails under LTO ("asm operand has impossible
+	// constraints") as soon as this function grows.
+	register uint32_t a0 asm("r0") = user_code_start;
+	register uint32_t a1 asm("r1") = (uint32_t)code_size;
+	register uint32_t a2 asm("r2") = user_code_exec;
+	register uint32_t a3 asm("r3") = (uint32_t)buffer;
+	register uint32_t a4 asm("r4") = (uint32_t)funcbuf;
+	asm volatile("blx deluge_chainload" : : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4) : "memory");
 #endif
 }

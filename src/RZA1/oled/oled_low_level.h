@@ -29,6 +29,7 @@ void setupSPIInterrupts();
 void sendSPITransferFromQueue();
 void oledLowLevelTimerCallback();
 void oledRoutine();
+bool oledBusIsIdle(void);
 
 enum OLED_MESSAGE {
     OLED_MESSAGE_NONE     = 256,

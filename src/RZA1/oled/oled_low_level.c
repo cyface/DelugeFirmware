@@ -77,6 +77,14 @@ static void armOledDmaWatchdog()
     oledDmaWatchdogTime  = *TCNT[TIMER_SYSTEM_SLOW] + msToSlowTimerCount(50);
 }
 
+// True when no OLED frame is on the SPI bus and no select/deselect handshake with the PIC is pending,
+// i.e. it is safe to talk to the panel out of band (setupOLED()).
+bool oledBusIsIdle(void)
+{
+    return !spiBusCurrentlySending && !oled_sending && oledPendingMessageToSend == 0
+           && oledWaitingForMessage == OLED_MESSAGE_NONE;
+}
+
 // Call this before you routinely call uartFlushIfNotSending().
 void oledRoutine()
 {
