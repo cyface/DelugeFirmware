@@ -92,7 +92,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -212,7 +212,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -332,7 +332,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -452,7 +452,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -572,7 +572,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -692,7 +692,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -812,7 +812,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -932,7 +932,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -1052,7 +1052,7 @@
 				<envelope1>
 					<attack>0x80000000</attack>
 					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<sustain>0x7FFFFFFF</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
@@ -1159,7 +1159,7 @@
 				<compressorShape>0xDC28F5B2</compressorShape>
 				<oscAVolume>0x7FFFFFFF</oscAVolume>
 				<oscAPulseWidth>0x73333332</oscAPulseWidth>
-				<oscAWavetablePosition>0x66666666</oscAWavetablePosition>
+				<oscAWavetablePosition>0x7FFFFFFF</oscAWavetablePosition>
 				<oscBVolume>0x80000000</oscBVolume>
 				<oscBPulseWidth>0x00000000</oscBPulseWidth>
 				<noiseVolume>0x80000000</noiseVolume>
@@ -1171,8 +1171,8 @@
 				<hpfResonance>0x80000000</hpfResonance>
 				<envelope1>
 					<attack>0x80000000</attack>
-					<decay>0xE6666654</decay>
-					<sustain>0x7FFFFFD2</sustain>
+					<decay>0x99999995</decay>
+					<sustain>0x9EB851E6</sustain>
 					<release>0x80000000</release>
 				</envelope1>
 				<envelope2>
