@@ -46,6 +46,7 @@ public:
 
 	DxPatch* dxPatch;
 	bool dxPatchChanged = false;
+	DrumModel drumModel = DrumModel::ANALOG_KICK; // Only used when oscType == OscType::DRUM
 	SampleRepeatMode repeatMode;
 
 	int8_t timeStretchAmount;

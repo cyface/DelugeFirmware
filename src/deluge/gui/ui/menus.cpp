@@ -139,6 +139,8 @@
 #include "gui/menu_item/note_row/iterance_step_toggle.h"
 #include "gui/menu_item/note_row/probability.h"
 #include "gui/menu_item/osc/audio_recorder.h"
+#include "gui/menu_item/osc/drum/macro.h"
+#include "gui/menu_item/osc/drum/model.h"
 #include "gui/menu_item/osc/pulse_width.h"
 #include "gui/menu_item/osc/retrigger_phase.h"
 #include "gui/menu_item/osc/source/feedback.h"

@@ -1,6 +1,7 @@
 from dmui.dsl import Menu
 
 _available_txt = 'Oscillator has its type set to <string-for name="STRING_FOR_SAMPLE">SAMPLE</string-for>'
+_drum_txt = 'Oscillator has its type set to <string-for name="STRING_FOR_DRUM">DRUM</string-for>'
 
 sync = Menu(
     "osc::Sync",
@@ -40,6 +41,15 @@ for i in range(2):
             name="STRING_FOR_FILE_BROWSER",
         ),
         Menu(
+            "osc::drum::Model",
+            f"osc{i}DrumModelMenu",
+            ["{name}", "{title}", f"{i}"],
+            "oscillator/drum/model.md",
+            name="STRING_FOR_MODEL",
+            title="STRING_FOR_OSC_DRUM_MODEL_MENU_TITLE",
+            available_when=_drum_txt,
+        ),
+        Menu(
             "sample::Transpose",
             f"source{i}TransposeMenu",
             ["{name}", "{title}", "params::LOCAL_OSC_A_PITCH_ADJUST", f"{i}"],
@@ -64,6 +74,33 @@ for i in range(2):
             name="STRING_FOR_PULSE_WIDTH",
             title="STRING_FOR_OSC_P_WIDTH_MENU_TITLE",
             available_when="Voice is in subtractive or ring-mod mode and oscillator is not in a sample or input monitoring mode",
+        ),
+        Menu(
+            "osc::drum::Tone",
+            f"osc{i}DrumToneMenu",
+            ["{name}", "{title}", "params::LOCAL_OSC_A_PHASE_WIDTH", f"{i}"],
+            "oscillator/drum/tone.md",
+            name="STRING_FOR_DRUM_TONE",
+            title="STRING_FOR_OSC_DRUM_TONE_MENU_TITLE",
+            available_when=_drum_txt,
+        ),
+        Menu(
+            "osc::drum::Decay",
+            f"osc{i}DrumDecayMenu",
+            ["{name}", "{title}", "params::LOCAL_OSC_A_WAVE_INDEX", f"{i}"],
+            "oscillator/drum/decay.md",
+            name="STRING_FOR_DECAY",
+            title="STRING_FOR_OSC_DRUM_DECAY_MENU_TITLE",
+            available_when=_drum_txt,
+        ),
+        Menu(
+            "osc::drum::Snap",
+            f"osc{i}DrumSnapMenu",
+            ["{name}", "{title}", "params::LOCAL_CARRIER_0_FEEDBACK", f"{i}"],
+            "oscillator/drum/snap.md",
+            name="STRING_FOR_DRUM_SNAPPY",
+            title="STRING_FOR_OSC_DRUM_SNAP_MENU_TITLE",
+            available_when=_drum_txt,
         ),
         Menu(
             "osc::source::Feedback",

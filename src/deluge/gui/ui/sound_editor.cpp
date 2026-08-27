@@ -10,6 +10,9 @@
 #include "gui/menu_item/menu_item.h"
 #include "gui/menu_item/mpe/zone_num_member_channels.h"
 #include "gui/menu_item/multi_range.h"
+#include "gui/menu_item/osc/drum/macro.h"
+#include "gui/menu_item/osc/pulse_width.h"
+#include "gui/menu_item/osc/source/feedback.h"
 #include "gui/ui/audio_recorder.h"
 #include "gui/ui/browser/sample_browser.h"
 #include "gui/ui/keyboard/keyboard_screen.h"
@@ -57,6 +60,8 @@
 using namespace deluge;
 using namespace deluge::gui;
 using namespace deluge::gui::menu_item;
+
+static OscType shortcutSourceOscType(Clip* clip, int32_t sourceIndex);
 
 #define comingSoonMenu (MenuItem*)0xFFFFFFFF
 
@@ -1371,6 +1376,34 @@ doSetup:
 						setupSuccess = setup(currentClip, item, thingIndex);
 					}
 
+					// Drum models borrow the pulse-width / wave-index / feedback params as their macros, so
+					// redirect those pads to the drum-specific menu items
+					if (!setupSuccess && shortcutSourceOscType(currentClip, thingIndex) == OscType::DRUM) {
+						MenuItem* drumItem = nullptr;
+						if (item == &osc0PulseWidthMenu) {
+							drumItem = &osc0DrumToneMenu;
+						}
+						else if (item == &osc1PulseWidthMenu) {
+							drumItem = &osc1DrumToneMenu;
+						}
+						else if (item == &source0WaveIndexMenu) {
+							drumItem = &osc0DrumDecayMenu;
+						}
+						else if (item == &source1WaveIndexMenu) {
+							drumItem = &osc1DrumDecayMenu;
+						}
+						else if (item == &source0FeedbackMenu) {
+							drumItem = &osc0DrumSnapMenu;
+						}
+						else if (item == &source1FeedbackMenu) {
+							drumItem = &osc1DrumSnapMenu;
+						}
+						if (drumItem != nullptr) {
+							item = drumItem;
+							setupSuccess = setup(currentClip, item, thingIndex);
+						}
+					}
+
 					if (!setupSuccess) {
 						return ActionResult::DEALT_WITH;
 					}
@@ -1624,6 +1657,28 @@ void SoundEditor::modEncoderButtonAction(uint8_t whichModEncoder, bool on) {
 	else {
 		UI::modEncoderButtonAction(whichModEncoder, on);
 	}
+}
+
+/// The osc type of source `sourceIndex` on the Sound a param shortcut pad would edit for `clip` (the synth, or the
+/// kit's selected sound drum). Used before setup() has run, so it can't rely on currentSource.
+static OscType shortcutSourceOscType(Clip* clip, int32_t sourceIndex) {
+	if (clip == nullptr || clip->type != ClipType::INSTRUMENT || clip->output == nullptr) {
+		return OscType::SINE;
+	}
+	Sound* sound = nullptr;
+	if (clip->output->type == OutputType::SYNTH) {
+		sound = static_cast<SoundInstrument*>(clip->output);
+	}
+	else if (clip->output->type == OutputType::KIT) {
+		Drum* selectedDrum = static_cast<Kit*>(clip->output)->selectedDrum;
+		if (selectedDrum != nullptr && selectedDrum->type == DrumType::SOUND) {
+			sound = static_cast<SoundDrum*>(selectedDrum);
+		}
+	}
+	if (sound == nullptr || sourceIndex < 0 || sourceIndex >= kNumSources) {
+		return OscType::SINE;
+	}
+	return sound->sources[sourceIndex].oscType;
 }
 
 bool SoundEditor::setup(Clip* clip, const MenuItem* item, int32_t sourceIndex) {

@@ -365,10 +365,21 @@ enum class OscType : uint8_t {
 	WAVETABLE,
 	SAMPLE,
 	DX7,
+	DRUM,
 	INPUT_L,
 	INPUT_R,
 	INPUT_STEREO,
 };
+
+/// Which of the Mutable Instruments Plaits drum models an OscType::DRUM source plays.
+enum class DrumModel : uint8_t {
+	ANALOG_KICK,  // 808-style bridged-T resonator kick
+	ANALOG_SNARE, // 808-style two-mode shell + filtered noise
+	HI_HAT,       // six square oscillators into clocked noise, BPF/HPF
+	SYNTH_KICK,   // 909-style FM sine kick
+	SYNTH_SNARE,  // 909-style sine pair + noise
+};
+constexpr int32_t kNumDrumModels = util::to_underlying(DrumModel::SYNTH_SNARE) + 1;
 
 constexpr OscType kLastRingmoddableOscType = OscType::WAVETABLE;
 constexpr int32_t kNumOscTypesRingModdable = util::to_underlying(kLastRingmoddableOscType) + 1;
