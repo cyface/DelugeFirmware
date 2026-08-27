@@ -19,6 +19,7 @@
 
 #include "io/midi/sysex.h"
 #include "hid/display/screensaver.h"
+#include "io/debug/plugin_spike.h"
 #include "io/debug/print.h"
 #include "io/debug/sdram_text_bench.h"
 #include "io/midi/midi_device.h"
@@ -38,7 +39,8 @@ void Debug::sysexReceived(MIDICable& cable, uint8_t* data, int32_t len) {
 	case 0:
 		if (data[2] == 1) {
 			midiDebugCable = &cable;
-			sdramTextBenchRequest();
+			pluginSpikeRequest(); // #37 spike: run once per console attach (dev builds only)
+			// sdramTextBenchRequest(); // measured already (PR #4764); its cache-flush storms only add noise here
 		}
 		else if (data[2] == 0) {
 			midiDebugCable = nullptr;

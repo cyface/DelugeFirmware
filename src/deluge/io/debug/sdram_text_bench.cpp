@@ -95,7 +95,9 @@ void makeAllCachesCold() {
 	// Global flush is heavy-handed but simple and fully defensible as "cold". Runs between timed
 	// regions only. Briefly disturbs everything else running (audio may tick over a bump).
 	L1_D_CacheWritebackFlushAll();
-	L2CacheFlushAll();
+	// Clean before invalidating: L2CacheFlushAll() is invalidate-by-way only and throws away the dirty
+	// lines L1 just wrote back into L2 - on hardware that corrupted the heap (M000/S002) a minute later.
+	L2CacheCleanInvalidateAll();
 	L1_I_CacheFlushAll();
 	__asm__ volatile("mcr p15, 0, %0, c7, c5, 6" ::"r"(0)); // BPIALL
 	__asm__ volatile("dsb\nisb");
