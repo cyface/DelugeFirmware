@@ -1,6 +1,7 @@
 #include "io/debug/plugin_spike.h"
 #include "definitions.h"
 #include "fatfs/ff.h"
+#include "hid/display/oled.h"
 #include "io/debug/print.h"
 #include "io/midi/sysex.h"
 #include <algorithm>
@@ -9,6 +10,7 @@
 
 extern "C" {
 #include "RZA1/cache/cache.h"
+#include "RZA1/oled/oled_low_level.h"
 #include "util/cfunctions.h"
 // The reference: the exact kernel source the blob is built from, compiled into internal .text.
 #include "../../../../contrib/plugin_spike/spike_blob.h"
@@ -245,6 +247,18 @@ void runSpike() {
 			}
 		}
 	}
+	lineStart();
+	append("{\"spike\":\"plugin\",\"info\":\"bootlog\"");
+	kv("have_oled", bootLog.haveOled);
+	kv("pic_fw", bootLog.picFirmwareVersion);
+	kv("pic_oled", bootLog.picSaysOledPresent);
+	kv("oled_dc_acks", bootLog.oledDcAcks);
+	kv("breaks", bootLog.breaks);
+	kv("boot_resp", bootLog.bootResponses);
+	kv("other_resp", bootLog.otherResponses);
+	append("}");
+	lineQueue();
+
 	lineStart();
 	append("{\"spike\":\"plugin\",\"info\":\"done\"}");
 	lineQueue();

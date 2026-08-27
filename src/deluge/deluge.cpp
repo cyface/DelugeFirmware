@@ -48,6 +48,7 @@
 #include "hid/matrix/matrix_driver.h"
 #include "io/debug/log.h"
 #include "io/debug/plugin_spike.h"
+BootLog bootLog;
 #include "io/debug/sdram_text_bench.h"
 #include "io/midi/midi_device_manager.h"
 #include "io/midi/midi_engine.h"
@@ -711,6 +712,7 @@ extern "C" int32_t deluge_main(void) {
 
 		setupSPIInterrupts();
 		oledDMAInit();
+		bootLog.haveOled = 1;
 		setupOLED(); // Set up OLED now
 		display = new deluge::hid::display::OLED;
 	}
@@ -774,6 +776,8 @@ extern "C" int32_t deluge_main(void) {
 			uint8_t value = util::to_underlying(response);
 			picFirmwareVersion = value & 127;
 			picSaysOLEDPresent = value & 128;
+			bootLog.picFirmwareVersion = picFirmwareVersion;
+			bootLog.picSaysOledPresent = picSaysOLEDPresent ? 1 : 0;
 			D_PRINTLN("PIC firmware version reported: %s", value);
 			return 0;
 		}
@@ -791,16 +795,20 @@ extern "C" int32_t deluge_main(void) {
 			return 0;
 
 		case UNKNOWN_BREAK:
+			bootLog.breaks++;
 			return 1;
 
 		case UNKNOWN_BOOT_RESPONSE: // value 129. Happens every boot. If you know what this is, please rename!
+			bootLog.bootResponses++;
 			return 0;
 
 		default:
 			if (response >= UNKNOWN_OLED_RELATED_COMMAND && response <= SET_DC_HIGH) {
 				// OLED D/C low ack
+				bootLog.oledDcAcks++;
 				return 0;
 			}
+			bootLog.otherResponses++;
 			// If any hint of another button being held, don't do anything.
 			otherButtonsOrEvents = true;
 			return 0;
