@@ -81,6 +81,7 @@ identity only carries major.minor.patch, so the *commit* comes from the bin, not
 | `BAD KEY` popup | key mismatch caught at the load message | as E997 |
 | `CHECKSUM FAIL` popup | dropped/garbled packets | retry with `-d 5` |
 | no pong after the load | image didn't boot | power-cycle: reverts to the SD firmware, nothing is lost; check the build |
+| send completes, USB never re-enumerates, screen stuck on screensaver, no pong | the **running** firmware predates the chainload L2 fix (`chainload-l2-cold`, 2026-08-27): stale L2 lines crash any image that isn't byte-identical to the running one | power-cycle, then SD-install a build that has the fix once; after that any image loads |
 
 ## Nice-to-haves not yet implemented
 
