@@ -224,8 +224,8 @@ def row(
 KIT_808 = [
     row("KICK", "808kick", tone=0.35, decay=0.55, snap=0.30, transpose=-3),
     row("KICK LONG", "808kick", tone=0.25, decay=0.85, snap=0.15, transpose=-5),
-    row("SNARE", "808snare", tone=0.35, decay=0.45, snap=0.55, transpose=7),
-    row("SNARE SNAP", "808snare", tone=0.45, decay=0.35, snap=0.85, transpose=9),
+    row("SNARE", "808snare", tone=0.3, decay=0.3, snap=0.5, transpose=5),
+    row("SNARE SNAP", "808snare", tone=0.15, decay=0.3, snap=0.65, transpose=5),
     row("TOM LO", "808snare", tone=0.20, decay=0.60, snap=0.00, transpose=-7),
     row("TOM MID", "808snare", tone=0.25, decay=0.55, snap=0.00, transpose=-1),
     row("TOM HI", "808snare", tone=0.30, decay=0.50, snap=0.00, transpose=4),
@@ -239,7 +239,7 @@ KIT_808 = [
         choke=True,
     ),
     row("HAT OPEN", "hihat", tone=0.95, decay=0.65, snap=0.3, transpose=8, choke=True),
-    row("CYMBAL", "hihat", tone=0.8, decay=0.7, snap=0.4, transpose=8),
+    row("CYMBAL", "hihat", tone=0.85, decay=0.7, snap=0.3, transpose=17),
 ]
 
 KIT_909 = [
