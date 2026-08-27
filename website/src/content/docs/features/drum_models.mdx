@@ -1,0 +1,61 @@
+---
+title: Drum Models
+---
+
+import { Badge } from "@astrojs/starlight/components"
+
+<Badge text="c1.4 Feature" variant="tip" />
+
+Sample-free 808 / 909-style drums as an oscillator type, ported from the drum engines of
+Mutable Instruments' Plaits.
+
+## Description
+
+The **Drum** oscillator type plays one of five analog drum models instead of a waveform or a
+sample:
+
+| Model | What it is |
+| --- | --- |
+| 808 Kick | Bridged-T resonator kick with an attack pulse, self-FM and overdrive |
+| 808 Snare | Two resonant shell modes (more at higher Tone) plus band-passed noise |
+| Hi-hat | Six square oscillators mixed into metallic noise, band-passed and high-passed |
+| 909 Kick | FM sine kick with a click and attack noise |
+| 909 Snare | A pair of detuned sines with coupled resets plus filtered noise |
+
+It works in kits (one model per row) and in synth clips, where a kick or snare can be played
+chromatically. Pitch follows the note; the kick models play two octaves below it and the snares
+one octave below, so a kit row at its default note lands in the classic register.
+
+Each model has three macro controls, found in the oscillator's menu when its type is `Drum`:
+
+- **Tone** – brightness / timbre (Plaits' TIMBRE).
+- **Decay** – decay time (Plaits' MORPH).
+- **Drive / Snappy / Noise** – the model-specific third control (Plaits' HARMONICS): attack FM
+  and overdrive on the kicks, noise-vs-shell balance on the snares, clocked-noise amount on the
+  hi-hat.
+
+They live on the oscillator's pulse width, wave-index and carrier feedback parameters, so they
+can be automated, patched from any modulation source and reached from the usual shortcut pads.
+
+Velocity drives the models' **accent** input (harder hits are brighter and louder, not just
+louder). A drum source behaves like a one-shot sample: note-offs are ignored and the voice ends
+by itself once the drum has decayed, so no release time needs setting. The Deluge's envelopes,
+filters and effects still apply on top.
+
+## Enabling
+
+Turn on `Drum Models` in the community features menu (`SETTINGS > COMMUNITY FEATURES`) to make
+`Drum` selectable as an oscillator type. Presets and songs that already use it load and play
+regardless of the setting.
+
+## Example kits
+
+`contrib/plaits_drums/` in the firmware repository contains two ready-made kits, `808 Models`
+and `909 Models`, built entirely from these models - copy them into the `KITS` folder of your
+SD card.
+
+## Credits
+
+The models are MIT-licensed code from
+[Mutable Instruments Plaits](https://github.com/pichenettes/eurorack/tree/master/plaits) by
+Emilie Gillet.

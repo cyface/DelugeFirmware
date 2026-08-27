@@ -2483,7 +2483,9 @@ dontUseCache: {}
 				const float clamped = std::clamp(drumBuf[i], -1.0f, 1.0f);
 				const int32_t sampleQ31 = static_cast<int32_t>(clamped * 2147483520.0f);
 				const int32_t amplified = multiply_32x32_rshift32(sampleQ31, sourceAmplitudeNow);
-				if (stereoUnison) {
+				// amplitudeL/R are equal-gain unless unison stereo spread is on, so this also covers a stereo
+				// buffer that's only stereo because the other source is a stereo sample.
+				if (stereoBuffer) {
 					oscBuffer[(i << 1)] += multiply_32x32_rshift32(amplified, amplitudeL) << 2;
 					oscBuffer[(i << 1) + 1] += multiply_32x32_rshift32(amplified, amplitudeR) << 2;
 				}
