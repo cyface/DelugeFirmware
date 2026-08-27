@@ -90,7 +90,7 @@ def check_git(expect_branch: str | None, allow_dirty: bool) -> None:
     say(f"ok   branch {branch} @ {run(['git', 'rev-parse', '--short', 'HEAD'])}")
 
 
-def check_bin(bin_file: Path) -> str:
+def check_bin(bin_file: Path, skip_freshness: bool = False) -> str:
     if not bin_file.is_file():
         raise Fail(f"{bin_file} does not exist - run ./dbt build release")
     head = run(["git", "rev-parse", "--short", "HEAD"])
@@ -109,6 +109,9 @@ def check_bin(bin_file: Path) -> str:
         full_head = run(["git", "rev-parse", "HEAD"])
         if not full_head.startswith(built_from):
             problems.append(f"bin was built from {built_from}, HEAD is {head}")
+    if problems and skip_freshness:
+        say("WARN " + "; ".join(problems) + " (sending anyway: --skip-freshness)")
+        problems = []
     if problems:
         raise Fail(
             "; ".join(problems)
@@ -294,13 +297,13 @@ def do_preflight(a, root: Path) -> tuple[Path, str]:
     if a.rebuild:
         rebuild(root)
     try:
-        ver = check_bin(bin_file)
+        ver = check_bin(bin_file, a.skip_freshness)
     except Fail as e:
         if a.rebuild or a.no_auto_rebuild:
             raise
         say("WARN " + str(e).splitlines()[0] + " - rebuilding")
         rebuild(root)
-        ver = check_bin(bin_file)
+        ver = check_bin(bin_file, a.skip_freshness)
     check_build_flag(root)
     check_key(root, a.key)
     probe(a.port)
@@ -391,6 +394,11 @@ def main() -> int:
         "--no-auto-rebuild",
         action="store_true",
         help="fail instead of rebuilding a stale bin",
+    )
+    ap.add_argument(
+        "--skip-freshness",
+        action="store_true",
+        help="send the given .bin even if it does not match HEAD (pinned/baseline images)",
     )
     ap.add_argument("-k", "--key", help="8-digit hex key (default: .deluge_hex_key)")
     ap.add_argument(
