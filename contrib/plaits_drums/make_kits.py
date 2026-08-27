@@ -84,8 +84,8 @@ ROW_TEMPLATE = """\t\t<sound>
 \t\t\t\t<hpfResonance>0x80000000</hpfResonance>
 \t\t\t\t<envelope1>
 \t\t\t\t\t<attack>0x80000000</attack>
-\t\t\t\t\t<decay>0xE6666654</decay>
-\t\t\t\t\t<sustain>0x7FFFFFD2</sustain>
+\t\t\t\t\t<decay>{env_decay}</decay>
+\t\t\t\t\t<sustain>{env_sustain}</sustain>
 \t\t\t\t\t<release>0x80000000</release>
 \t\t\t\t</envelope1>
 \t\t\t\t<envelope2>
@@ -192,6 +192,13 @@ KIT_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+def menu(v: int) -> str:
+    """0..50 menu value -> standard bipolar param hex."""
+    if v >= 50:
+        return "0x7FFFFFFF"
+    return f"0x{(v * 85899345 - 0x80000000) & 0xFFFFFFFF:08X}"
+
+
 def row(
     name,
     model,
@@ -202,8 +209,14 @@ def row(
     volume="0x50000000",
     pan=0.0,
     choke=False,
+    env_decay=20,
+    env_sustain=50,
 ):
+    """env_decay / env_sustain are Envelope 1 menu values (0..50). Drum rows ignore note-offs, so a
+    partial sustain shapes the hit as fast-drop-then-tail (the model's own decay carries the tail)."""
     return ROW_TEMPLATE.format(
+        env_decay=menu(env_decay),
+        env_sustain=menu(env_sustain),
         name=name,
         model=model,
         transpose=transpose,
@@ -222,6 +235,8 @@ def row(
 # against real 808 hat samples: the model needs Tone ~0.95 (band-pass up near 8 kHz) and f0 ~414 Hz
 # (transpose +8) to put its energy at 4-16 kHz like the real thing; lower Tone sounds like a bell.
 # The cymbal / ride rows use the ring-modulated "hihat2" model, which gets closer to a real cymbal.
+# The 808 cymbal additionally uses Envelope 1 (decay 5, sustain 6) for the real thing's fast 20 dB
+# drop in ~335 ms; the model's own decay (at max) carries the tail out to ~0.8 s.
 KIT_808 = [
     row("KICK", "808kick", tone=0.35, decay=0.55, snap=0.30, transpose=-3),
     row("KICK LONG", "808kick", tone=0.25, decay=0.85, snap=0.15, transpose=-5),
@@ -240,7 +255,16 @@ KIT_808 = [
         choke=True,
     ),
     row("HAT OPEN", "hihat", tone=0.95, decay=0.65, snap=0.3, transpose=8, choke=True),
-    row("CYMBAL", "hihat2", tone=0.9, decay=0.9, snap=0.7, transpose=-5),
+    row(
+        "CYMBAL",
+        "hihat2",
+        tone=0.9,
+        decay=1.0,
+        snap=0.7,
+        transpose=-5,
+        env_decay=5,
+        env_sustain=6,
+    ),
 ]
 
 KIT_909 = [
