@@ -2459,17 +2459,20 @@ dontUseCache: {}
 			const float f0 = static_cast<float>(phaseIncrement) * (1.0f / 4294967296.0f)
 			                 * deluge::dsp::drums::drumModelPitchScale(sound.sources[s].drumModel);
 
-			// Macro params, normalised to 0..1. Pulse width is a "half precision" param (0..INT32_MAX);
-			// wave index and feedback are full range.
-			const float tone =
-			    static_cast<float>(std::max<int32_t>(paramFinalValues[params::LOCAL_OSC_A_PHASE_WIDTH + s], 0))
-			    * (1.0f / 2147483648.0f);
+			// Macro params, normalised to 0..1, from the patcher's *final* values (not the raw preset values):
+			//  - pulse width / wave index are hybrid params: final = preset / 2, so +-2^30 full scale
+			//  - carrier feedback is a linear param: final = neutral * (0..2), preset min -> 0, max -> 2 * neutral
+			const float tone = std::clamp(static_cast<float>(paramFinalValues[params::LOCAL_OSC_A_PHASE_WIDTH + s])
+			                                  * (1.0f / 1073741824.0f),
+			                              0.0f, 1.0f);
 			const float decay =
-			    (static_cast<float>(paramFinalValues[params::LOCAL_OSC_A_WAVE_INDEX + s]) + 2147483648.0f)
-			    * (1.0f / 4294967296.0f);
+			    std::clamp((static_cast<float>(paramFinalValues[params::LOCAL_OSC_A_WAVE_INDEX + s]) + 1073741824.0f)
+			                   * (1.0f / 2147483648.0f),
+			               0.0f, 1.0f);
 			const float snap =
-			    (static_cast<float>(paramFinalValues[params::LOCAL_CARRIER_0_FEEDBACK + s]) + 2147483648.0f)
-			    * (1.0f / 4294967296.0f);
+			    std::clamp(static_cast<float>(paramFinalValues[params::LOCAL_CARRIER_0_FEEDBACK + s])
+			                   / (2.0f * static_cast<float>(paramNeutralValues[params::LOCAL_CARRIER_0_FEEDBACK + s])),
+			               0.0f, 1.0f);
 
 			bool active = drumVoice->render(drumBuf, numSamples, f0, tone, decay, snap);
 			if (!active) {
