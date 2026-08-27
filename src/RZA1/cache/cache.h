@@ -71,6 +71,7 @@ void L2CacheEnable(void);
 void L2CacheUnlockData(void);
 void L2CacheDisable(void);
 void L2CacheCleanInvalidateRange(uintptr_t start, uintptr_t end);
+void L2CacheCleanInvalidateAll(void);
 void invalidate_range_all_caches(uintptr_t start, uintptr_t end);
 
 extern void R_CACHE_L1Init(void);
