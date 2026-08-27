@@ -57,6 +57,15 @@ void chainload_from_buf(uint8_t* buffer, int buf_size) {
 	invalidate_range_all_caches(user_code_start, user_code_start + (uint32_t)code_size + 4);
 	invalidate_range_all_caches((uint32_t)funcbuf, (uint32_t)funcbuf + 1024);
 
+	// The chainloader only switches off the L1 caches (SCTLR); the PL310 L2 stays enabled and keeps every line
+	// allocated after the range maintenance above - this function, the cache routines, the first-stage loader.
+	// Those lines hold the OLD image. The MMU-off copy bypasses L2, so once the new image turns its MMU back on
+	// it can fetch stale old-image bytes at those addresses before it reaches its own L2CacheInit(). A byte-identical
+	// image hides this; any other image can crash during early boot. Clean + invalidate the whole L2 and switch it
+	// off so the new image starts from a cold L2, exactly as it would after a power-on.
+	L2CacheCleanInvalidateAll();
+	L2CacheDisable();
+
 	// Jump to the chainloader
 	asm volatile("mov r0,%0\n\t"
 	             "mov r1,%1\n\t"

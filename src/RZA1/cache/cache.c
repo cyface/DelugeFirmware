@@ -234,6 +234,24 @@ void L2CacheFlushAll(void)
 }
 
 /******************************************************************************
+ * Function Name: L2CacheCleanInvalidateAll
+ * Description  : Clean and invalidate every L2 cache line (all ways), then
+ *                wait for the operation to drain. Unlike L2CacheFlushAll this
+ *                writes dirty data back to RAM before dropping the lines.
+ * Arguments    : none
+ * Return Value : none
+ ******************************************************************************/
+void L2CacheCleanInvalidateAll(void)
+{
+    L2C.REG7_CLEAN_INV_WAY = L2CACHE_8WAY;
+    while ((L2C.REG7_CLEAN_INV_WAY & L2CACHE_8WAY) != 0x00000000uL)
+    {
+        /* Wait completion */
+    }
+    L2C.REG7_CACHE_SYNC = 0;
+}
+
+/******************************************************************************
  * Function Name: L2CacheEnable
  * Description  : Enable L2 cache.
  * Arguments    : none
