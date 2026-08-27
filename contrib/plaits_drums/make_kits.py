@@ -243,13 +243,13 @@ KIT_808 = [
 ]
 
 KIT_909 = [
-    row("KICK", "909kick", tone=0.45, decay=0.50, snap=0.45, transpose=-4),
-    row("KICK PUNCH", "909kick", tone=0.60, decay=0.35, snap=0.80, transpose=-2),
+    row("KICK", "909kick", tone=0.45, decay=0.70, snap=0.45, transpose=-4),
+    row("KICK PUNCH", "909kick", tone=0.60, decay=0.55, snap=0.80, transpose=-2),
     row("SNARE", "909snare", tone=0.40, decay=0.45, snap=0.55, transpose=5),
     row("SNARE SNAP", "909snare", tone=0.55, decay=0.35, snap=0.85, transpose=7),
-    row("TOM LO", "909snare", tone=0.30, decay=0.60, snap=0.05, transpose=-7),
-    row("TOM MID", "909snare", tone=0.30, decay=0.55, snap=0.05, transpose=-1),
-    row("TOM HI", "909snare", tone=0.30, decay=0.50, snap=0.05, transpose=4),
+    row("TOM LO", "909snare", tone=0.30, decay=0.75, snap=0.05, transpose=-7),
+    row("TOM MID", "909snare", tone=0.30, decay=0.70, snap=0.05, transpose=-1),
+    row("TOM HI", "909snare", tone=0.30, decay=0.65, snap=0.05, transpose=4),
     row(
         "HAT CLOSED",
         "hihat",
