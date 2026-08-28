@@ -82,6 +82,7 @@
 #include "modulation/patch/patch_cable_set.h"
 #include "playback/mode/playback_mode.h"
 #include "playback/playback_handler.h"
+#include "plugin/host/fx_plugin_bank.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/cv_engine.h"
 #include "processing/sound/sound_drum.h"
@@ -123,186 +124,225 @@ const uint32_t mutePadActionUIModes[] = {UI_MODE_NOTES_PRESSED, UI_MODE_AUDITION
 
 const uint32_t verticalScrollUIModes[] = {UI_MODE_NOTES_PRESSED, UI_MODE_AUDITIONING, UI_MODE_RECORD_COUNT_IN, 0};
 
-constexpr int32_t kNumNonGlobalParamsForAutomation = 84;
-constexpr int32_t kNumGlobalParamsForAutomation = 40;
+using AutomationParam = std::pair<params::Kind, ParamType>;
+
+namespace {
+// The insert-FX plugin param bank as automation entries, so a registered plugin's knobs are automatable without
+// an edit here.
+constexpr std::array<AutomationParam, params::kNumFxPluginParams> fxPluginParamsForAutomation(params::Kind kind) {
+	std::array<AutomationParam, params::kNumFxPluginParams> out{};
+	for (uint32_t i = 0; i < params::kNumFxPluginParams; i++) {
+		out[i] = {kind, deluge::plugin::fxBankParamId(i)};
+	}
+	return out;
+}
+
+template <size_t A, size_t B, size_t C>
+constexpr std::array<AutomationParam, A + B + C> concatParams(const std::array<AutomationParam, A>& a,
+                                                              const std::array<AutomationParam, B>& b,
+                                                              const std::array<AutomationParam, C>& c) {
+	std::array<AutomationParam, A + B + C> out{};
+	size_t n = 0;
+	for (auto const& e : a) {
+		out[n++] = e;
+	}
+	for (auto const& e : b) {
+		out[n++] = e;
+	}
+	for (auto const& e : c) {
+		out[n++] = e;
+	}
+	return out;
+}
+} // namespace
 
 // synth and kit rows FX - sorted in the order that Parameters are scrolled through on the display
-const std::array<std::pair<params::Kind, ParamType>, kNumNonGlobalParamsForAutomation> nonGlobalParamsForAutomation{{
-    // Master Volume, Pitch, Pan
-    {params::Kind::PATCHED, params::GLOBAL_VOLUME_POST_FX},
-    {params::Kind::PATCHED, params::LOCAL_PITCH_ADJUST},
-    {params::Kind::PATCHED, params::LOCAL_PAN},
-    // LPF Cutoff, Resonance, Morph
-    {params::Kind::PATCHED, params::LOCAL_LPF_FREQ},
-    {params::Kind::PATCHED, params::LOCAL_LPF_RESONANCE},
-    {params::Kind::PATCHED, params::LOCAL_LPF_MORPH},
-    // HPF Cutoff, Resonance, Morph
-    {params::Kind::PATCHED, params::LOCAL_HPF_FREQ},
-    {params::Kind::PATCHED, params::LOCAL_HPF_RESONANCE},
-    {params::Kind::PATCHED, params::LOCAL_HPF_MORPH},
-    // Bass, Bass Freq
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_BASS},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_BASS_FREQ},
-    // Treble, Treble Freq
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_TREBLE},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_TREBLE_FREQ},
-    // Reverb Amount
-    {params::Kind::PATCHED, params::GLOBAL_REVERB_AMOUNT},
-    // Delay Rate, Amount
-    {params::Kind::PATCHED, params::GLOBAL_DELAY_RATE},
-    {params::Kind::PATCHED, params::GLOBAL_DELAY_FEEDBACK},
-    // Sidechain Shape
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_SIDECHAIN_SHAPE},
-    // Decimation, Bitcrush, Wavefolder, Tape
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_SAMPLE_RATE_REDUCTION},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_BITCRUSHING},
-    {params::Kind::PATCHED, params::LOCAL_FOLD},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_TAPE_SATURATION},
-    // OSC 1 Volume, Pitch, Pulse Width, Carrier Feedback, Wave Index
-    {params::Kind::PATCHED, params::LOCAL_OSC_A_VOLUME},
-    {params::Kind::PATCHED, params::LOCAL_OSC_A_PITCH_ADJUST},
-    {params::Kind::PATCHED, params::LOCAL_OSC_A_PHASE_WIDTH},
-    {params::Kind::PATCHED, params::LOCAL_CARRIER_0_FEEDBACK},
-    {params::Kind::PATCHED, params::LOCAL_OSC_A_WAVE_INDEX},
-    // OSC 2 Volume, Pitch, Pulse Width, Carrier Feedback, Wave Index
-    {params::Kind::PATCHED, params::LOCAL_OSC_B_VOLUME},
-    {params::Kind::PATCHED, params::LOCAL_OSC_B_PITCH_ADJUST},
-    {params::Kind::PATCHED, params::LOCAL_OSC_B_PHASE_WIDTH},
-    {params::Kind::PATCHED, params::LOCAL_CARRIER_1_FEEDBACK},
-    {params::Kind::PATCHED, params::LOCAL_OSC_B_WAVE_INDEX},
-    // FM Mod 1 Volume, Pitch, Feedback
-    {params::Kind::PATCHED, params::LOCAL_MODULATOR_0_VOLUME},
-    {params::Kind::PATCHED, params::LOCAL_MODULATOR_0_PITCH_ADJUST},
-    {params::Kind::PATCHED, params::LOCAL_MODULATOR_0_FEEDBACK},
-    // FM Mod 2 Volume, Pitch, Feedback
-    {params::Kind::PATCHED, params::LOCAL_MODULATOR_1_VOLUME},
-    {params::Kind::PATCHED, params::LOCAL_MODULATOR_1_PITCH_ADJUST},
-    {params::Kind::PATCHED, params::LOCAL_MODULATOR_1_FEEDBACK},
-    // Env 1 ADSR
-    {params::Kind::PATCHED, params::LOCAL_ENV_0_ATTACK},
-    {params::Kind::PATCHED, params::LOCAL_ENV_0_DECAY},
-    {params::Kind::PATCHED, params::LOCAL_ENV_0_SUSTAIN},
-    {params::Kind::PATCHED, params::LOCAL_ENV_0_RELEASE},
-    // Env 2 ADSR
-    {params::Kind::PATCHED, params::LOCAL_ENV_1_ATTACK},
-    {params::Kind::PATCHED, params::LOCAL_ENV_1_DECAY},
-    {params::Kind::PATCHED, params::LOCAL_ENV_1_SUSTAIN},
-    {params::Kind::PATCHED, params::LOCAL_ENV_1_RELEASE},
-    // Env 3 ADSR
-    {params::Kind::PATCHED, params::LOCAL_ENV_2_ATTACK},
-    {params::Kind::PATCHED, params::LOCAL_ENV_2_DECAY},
-    {params::Kind::PATCHED, params::LOCAL_ENV_2_SUSTAIN},
-    {params::Kind::PATCHED, params::LOCAL_ENV_2_RELEASE},
-    // Env 4 ADSR
-    {params::Kind::PATCHED, params::LOCAL_ENV_3_ATTACK},
-    {params::Kind::PATCHED, params::LOCAL_ENV_3_DECAY},
-    {params::Kind::PATCHED, params::LOCAL_ENV_3_SUSTAIN},
-    {params::Kind::PATCHED, params::LOCAL_ENV_3_RELEASE},
-    // LFO 1
-    {params::Kind::PATCHED, params::GLOBAL_LFO_FREQ_1},
-    // LFO 2
-    {params::Kind::PATCHED, params::LOCAL_LFO_LOCAL_FREQ_1},
-    // LFO 3
-    {params::Kind::PATCHED, params::GLOBAL_LFO_FREQ_2},
-    // LFO 4
-    {params::Kind::PATCHED, params::LOCAL_LFO_LOCAL_FREQ_2},
-    // Mod FX Offset, Feedback, Depth, Rate
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_MOD_FX_OFFSET},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_MOD_FX_FEEDBACK},
-    {params::Kind::PATCHED, params::GLOBAL_MOD_FX_DEPTH},
-    {params::Kind::PATCHED, params::GLOBAL_MOD_FX_RATE},
-    // Arp Rate, Gate, Rhythm, Chord Polyphony, Sequence Length, Ratchet Amount, Note Prob, Bass Prob, Chord Prob,
-    // Ratchet Prob, Spread Gate, Spread Octave, Spread Velocity
-    {params::Kind::PATCHED, params::GLOBAL_ARP_RATE},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_GATE},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SPREAD_GATE},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SPREAD_OCTAVE},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_SPREAD_VELOCITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_RATCHET_AMOUNT},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_RATCHET_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_CHORD_POLYPHONY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_CHORD_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_NOTE_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_BASS_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SWAP_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_GLIDE_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_REVERSE_PROBABILITY},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_RHYTHM},
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SEQUENCE_LENGTH},
-    // Noise
-    {params::Kind::PATCHED, params::LOCAL_NOISE_VOLUME},
-    // Portamento
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_PORTAMENTO},
-    // Stutter Rate
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_STUTTER_RATE},
-    // Compressor Threshold
-    {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_COMPRESSOR_THRESHOLD},
-    // Mono Expression: X - Pitch Bend
-    {params::Kind::EXPRESSION, Expression::X_PITCH_BEND},
-    // Mono Expression: Y - Mod Wheel
-    {params::Kind::EXPRESSION, Expression::Y_SLIDE_TIMBRE},
-    // Mono Expression: Z - Channel Pressure
-    {params::Kind::EXPRESSION, Expression::Z_PRESSURE},
-}};
+constexpr auto nonGlobalParamsForAutomation = concatParams(
+    std::to_array<AutomationParam>({
+        // Master Volume, Pitch, Pan
+        {params::Kind::PATCHED, params::GLOBAL_VOLUME_POST_FX},
+        {params::Kind::PATCHED, params::LOCAL_PITCH_ADJUST},
+        {params::Kind::PATCHED, params::LOCAL_PAN},
+        // LPF Cutoff, Resonance, Morph
+        {params::Kind::PATCHED, params::LOCAL_LPF_FREQ},
+        {params::Kind::PATCHED, params::LOCAL_LPF_RESONANCE},
+        {params::Kind::PATCHED, params::LOCAL_LPF_MORPH},
+        // HPF Cutoff, Resonance, Morph
+        {params::Kind::PATCHED, params::LOCAL_HPF_FREQ},
+        {params::Kind::PATCHED, params::LOCAL_HPF_RESONANCE},
+        {params::Kind::PATCHED, params::LOCAL_HPF_MORPH},
+        // Bass, Bass Freq
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_BASS},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_BASS_FREQ},
+        // Treble, Treble Freq
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_TREBLE},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_TREBLE_FREQ},
+        // Reverb Amount
+        {params::Kind::PATCHED, params::GLOBAL_REVERB_AMOUNT},
+        // Delay Rate, Amount
+        {params::Kind::PATCHED, params::GLOBAL_DELAY_RATE},
+        {params::Kind::PATCHED, params::GLOBAL_DELAY_FEEDBACK},
+        // Sidechain Shape
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_SIDECHAIN_SHAPE},
+        // Decimation, Bitcrush, Wavefolder
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_SAMPLE_RATE_REDUCTION},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_BITCRUSHING},
+        {params::Kind::PATCHED, params::LOCAL_FOLD},
+    }),
+    // Insert-FX plugin params (Tape, ...)
+    fxPluginParamsForAutomation(params::Kind::UNPATCHED_SOUND),
+    std::to_array<AutomationParam>({
+        // OSC 1 Volume, Pitch, Pulse Width, Carrier Feedback, Wave Index
+        {params::Kind::PATCHED, params::LOCAL_OSC_A_VOLUME},
+        {params::Kind::PATCHED, params::LOCAL_OSC_A_PITCH_ADJUST},
+        {params::Kind::PATCHED, params::LOCAL_OSC_A_PHASE_WIDTH},
+        {params::Kind::PATCHED, params::LOCAL_CARRIER_0_FEEDBACK},
+        {params::Kind::PATCHED, params::LOCAL_OSC_A_WAVE_INDEX},
+        // OSC 2 Volume, Pitch, Pulse Width, Carrier Feedback, Wave Index
+        {params::Kind::PATCHED, params::LOCAL_OSC_B_VOLUME},
+        {params::Kind::PATCHED, params::LOCAL_OSC_B_PITCH_ADJUST},
+        {params::Kind::PATCHED, params::LOCAL_OSC_B_PHASE_WIDTH},
+        {params::Kind::PATCHED, params::LOCAL_CARRIER_1_FEEDBACK},
+        {params::Kind::PATCHED, params::LOCAL_OSC_B_WAVE_INDEX},
+        // FM Mod 1 Volume, Pitch, Feedback
+        {params::Kind::PATCHED, params::LOCAL_MODULATOR_0_VOLUME},
+        {params::Kind::PATCHED, params::LOCAL_MODULATOR_0_PITCH_ADJUST},
+        {params::Kind::PATCHED, params::LOCAL_MODULATOR_0_FEEDBACK},
+        // FM Mod 2 Volume, Pitch, Feedback
+        {params::Kind::PATCHED, params::LOCAL_MODULATOR_1_VOLUME},
+        {params::Kind::PATCHED, params::LOCAL_MODULATOR_1_PITCH_ADJUST},
+        {params::Kind::PATCHED, params::LOCAL_MODULATOR_1_FEEDBACK},
+        // Env 1 ADSR
+        {params::Kind::PATCHED, params::LOCAL_ENV_0_ATTACK},
+        {params::Kind::PATCHED, params::LOCAL_ENV_0_DECAY},
+        {params::Kind::PATCHED, params::LOCAL_ENV_0_SUSTAIN},
+        {params::Kind::PATCHED, params::LOCAL_ENV_0_RELEASE},
+        // Env 2 ADSR
+        {params::Kind::PATCHED, params::LOCAL_ENV_1_ATTACK},
+        {params::Kind::PATCHED, params::LOCAL_ENV_1_DECAY},
+        {params::Kind::PATCHED, params::LOCAL_ENV_1_SUSTAIN},
+        {params::Kind::PATCHED, params::LOCAL_ENV_1_RELEASE},
+        // Env 3 ADSR
+        {params::Kind::PATCHED, params::LOCAL_ENV_2_ATTACK},
+        {params::Kind::PATCHED, params::LOCAL_ENV_2_DECAY},
+        {params::Kind::PATCHED, params::LOCAL_ENV_2_SUSTAIN},
+        {params::Kind::PATCHED, params::LOCAL_ENV_2_RELEASE},
+        // Env 4 ADSR
+        {params::Kind::PATCHED, params::LOCAL_ENV_3_ATTACK},
+        {params::Kind::PATCHED, params::LOCAL_ENV_3_DECAY},
+        {params::Kind::PATCHED, params::LOCAL_ENV_3_SUSTAIN},
+        {params::Kind::PATCHED, params::LOCAL_ENV_3_RELEASE},
+        // LFO 1
+        {params::Kind::PATCHED, params::GLOBAL_LFO_FREQ_1},
+        // LFO 2
+        {params::Kind::PATCHED, params::LOCAL_LFO_LOCAL_FREQ_1},
+        // LFO 3
+        {params::Kind::PATCHED, params::GLOBAL_LFO_FREQ_2},
+        // LFO 4
+        {params::Kind::PATCHED, params::LOCAL_LFO_LOCAL_FREQ_2},
+        // Mod FX Offset, Feedback, Depth, Rate
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_MOD_FX_OFFSET},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_MOD_FX_FEEDBACK},
+        {params::Kind::PATCHED, params::GLOBAL_MOD_FX_DEPTH},
+        {params::Kind::PATCHED, params::GLOBAL_MOD_FX_RATE},
+        // Arp Rate, Gate, Rhythm, Chord Polyphony, Sequence Length, Ratchet Amount, Note Prob, Bass Prob, Chord Prob,
+        // Ratchet Prob, Spread Gate, Spread Octave, Spread Velocity
+        {params::Kind::PATCHED, params::GLOBAL_ARP_RATE},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_GATE},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SPREAD_GATE},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SPREAD_OCTAVE},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_SPREAD_VELOCITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_RATCHET_AMOUNT},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_RATCHET_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_CHORD_POLYPHONY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_CHORD_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_NOTE_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_BASS_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SWAP_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_GLIDE_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_REVERSE_PROBABILITY},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_RHYTHM},
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_ARP_SEQUENCE_LENGTH},
+        // Noise
+        {params::Kind::PATCHED, params::LOCAL_NOISE_VOLUME},
+        // Portamento
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_PORTAMENTO},
+        // Stutter Rate
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_STUTTER_RATE},
+        // Compressor Threshold
+        {params::Kind::UNPATCHED_SOUND, params::UNPATCHED_COMPRESSOR_THRESHOLD},
+        // Mono Expression: X - Pitch Bend
+        {params::Kind::EXPRESSION, Expression::X_PITCH_BEND},
+        // Mono Expression: Y - Mod Wheel
+        {params::Kind::EXPRESSION, Expression::Y_SLIDE_TIMBRE},
+        // Mono Expression: Z - Channel Pressure
+        {params::Kind::EXPRESSION, Expression::Z_PRESSURE},
+    }));
+constexpr int32_t kNumNonGlobalParamsForAutomation = nonGlobalParamsForAutomation.size();
 
 // global FX - sorted in the order that Parameters are scrolled through on the display
 // used with kit affect entire, audio clips, and arranger
-const std::array<std::pair<params::Kind, ParamType>, kNumGlobalParamsForAutomation> globalParamsForAutomation{{
-    // Master Volume, Pitch, Pan
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_VOLUME},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_PITCH_ADJUST},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_PAN},
-    // LPF Cutoff, Resonance
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_LPF_FREQ},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_LPF_RES},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_LPF_MORPH},
-    // HPF Cutoff, Resonance
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_HPF_FREQ},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_HPF_RES},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_HPF_MORPH},
-    // Bass, Bass Freq
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_BASS},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_BASS_FREQ},
-    // Treble, Treble Freq
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_TREBLE},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_TREBLE_FREQ},
-    // Reverb Amount
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_REVERB_SEND_AMOUNT},
-    // Delay Rate, Amount
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_DELAY_RATE},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_DELAY_AMOUNT},
-    // Sidechain Send, Shape
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SIDECHAIN_VOLUME},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SIDECHAIN_SHAPE},
-    // Decimation, Bitcrush, Tape
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SAMPLE_RATE_REDUCTION},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_BITCRUSHING},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_TAPE_SATURATION},
-    // Mod FX Offset, Feedback, Depth, Rate
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_OFFSET},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_FEEDBACK},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_DEPTH},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_RATE},
-    // Stutter Rate
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_STUTTER_RATE},
-    // Compressor Threshold
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_COMPRESSOR_THRESHOLD},
-    // Arp Rate, Gate, Rhythm, Chord Polyphony, Sequence Length, Ratchet Amount, Note Prob, Bass Prob, Chord Prob,
-    // Ratchet Prob, Spread Gate, Spread Octave, Spread Velocity
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RATE},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_GATE},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_SPREAD_GATE},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SPREAD_VELOCITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RATCHET_AMOUNT},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RATCHET_PROBABILITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_NOTE_PROBABILITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_BASS_PROBABILITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_SWAP_PROBABILITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_GLIDE_PROBABILITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_REVERSE_PROBABILITY},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RHYTHM},
-    {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_SEQUENCE_LENGTH},
-}};
+constexpr auto globalParamsForAutomation = concatParams(
+    std::to_array<AutomationParam>({
+        // Master Volume, Pitch, Pan
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_VOLUME},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_PITCH_ADJUST},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_PAN},
+        // LPF Cutoff, Resonance
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_LPF_FREQ},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_LPF_RES},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_LPF_MORPH},
+        // HPF Cutoff, Resonance
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_HPF_FREQ},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_HPF_RES},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_HPF_MORPH},
+        // Bass, Bass Freq
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_BASS},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_BASS_FREQ},
+        // Treble, Treble Freq
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_TREBLE},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_TREBLE_FREQ},
+        // Reverb Amount
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_REVERB_SEND_AMOUNT},
+        // Delay Rate, Amount
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_DELAY_RATE},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_DELAY_AMOUNT},
+        // Sidechain Send, Shape
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SIDECHAIN_VOLUME},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SIDECHAIN_SHAPE},
+        // Decimation, Bitcrush
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SAMPLE_RATE_REDUCTION},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_BITCRUSHING},
+    }),
+    // Insert-FX plugin params (Tape, ...)
+    fxPluginParamsForAutomation(params::Kind::UNPATCHED_GLOBAL),
+    std::to_array<AutomationParam>({
+        // Mod FX Offset, Feedback, Depth, Rate
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_OFFSET},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_FEEDBACK},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_DEPTH},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_MOD_FX_RATE},
+        // Stutter Rate
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_STUTTER_RATE},
+        // Compressor Threshold
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_COMPRESSOR_THRESHOLD},
+        // Arp Rate, Gate, Rhythm, Chord Polyphony, Sequence Length, Ratchet Amount, Note Prob, Bass Prob, Chord Prob,
+        // Ratchet Prob, Spread Gate, Spread Octave, Spread Velocity
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RATE},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_GATE},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_SPREAD_GATE},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_SPREAD_VELOCITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RATCHET_AMOUNT},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RATCHET_PROBABILITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_NOTE_PROBABILITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_BASS_PROBABILITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_SWAP_PROBABILITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_GLIDE_PROBABILITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_REVERSE_PROBABILITY},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_RHYTHM},
+        {params::Kind::UNPATCHED_GLOBAL, params::UNPATCHED_ARP_SEQUENCE_LENGTH},
+    }));
+constexpr int32_t kNumGlobalParamsForAutomation = globalParamsForAutomation.size();
 
 // shortcuts for toggling interpolation and pad selection mode
 constexpr uint8_t kInterpolationShortcutX = 0;

@@ -59,6 +59,11 @@ void tape_saturation_reset(void* state) {
 	}
 }
 
+/* The knob at its minimum is "off": bypassed entirely rather than a zero-drive pass through the shaper. */
+int32_t tape_saturation_is_active(const int32_t* params) {
+	return params[TAPE_SATURATION_PARAM_AMOUNT] != (int32_t)0x80000000;
+}
+
 void tape_saturation_render(const DelugePluginHostApi* api, void* state, const int32_t* params,
                             const DelugeFxContext* context, DelugePluginStereoSample* buffer, uint32_t numSamples) {
 	TapeSaturationState* s = (TapeSaturationState*)state;

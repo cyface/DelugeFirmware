@@ -16,7 +16,9 @@
  */
 
 #include "plugin/host/plugin_host.h"
+#include "modulation/params/param_set.h"
 #include "util/functions.h"
+#include <utility>
 
 namespace deluge::plugin {
 
@@ -47,6 +49,30 @@ static_assert(offsetof(DelugePluginStereoSample, r) == offsetof(StereoSample, r)
 
 const DelugePluginHostApi& hostApi() {
 	return kHostApi;
+}
+
+namespace {
+template <size_t... I>
+std::array<FxPluginSlot, sizeof...(I)> makeSlots(std::index_sequence<I...>) {
+	return {FxPluginSlot(*kBuiltinFxPlugins[I])...};
+}
+} // namespace
+
+FxPluginChain::FxPluginChain() : slots_(makeSlots(std::make_index_sequence<kNumBuiltinFxPlugins>{})) {
+}
+
+void FxPluginChain::process(std::span<StereoSample> buffer, UnpatchedParamSet& unpatched, uint32_t levelShift) {
+	uint32_t bankIndex = 0;
+	for (uint32_t i = 0; i < kNumBuiltinFxPlugins; i++) {
+		const DelugeFxPlugin& plugin = slots_[i].plugin();
+		int32_t params[kMaxParamsPerFxPlugin];
+		for (uint32_t k = 0; k < plugin.numParams; k++) {
+			params[k] = unpatched.getValue(fxBankParamId(bankIndex + k));
+		}
+		bankIndex += plugin.numParams;
+		bool enabled = (plugin.isActive == nullptr) || (plugin.isActive(params) != 0);
+		slots_[i].process(buffer, params, enabled, levelShift);
+	}
 }
 
 void FxPluginSlot::process(std::span<StereoSample> buffer, const int32_t* params, bool enabled, uint32_t levelShift) {

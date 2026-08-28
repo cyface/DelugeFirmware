@@ -77,6 +77,7 @@
 #include "gui/menu_item/firmware/version.h"
 #include "gui/menu_item/flash/status.h"
 #include "gui/menu_item/fx/clipping.h"
+#include "gui/menu_item/fx_plugin_param.h"
 #include "gui/menu_item/gate/mode.h"
 #include "gui/menu_item/gate/off_time.h"
 #include "gui/menu_item/gate/selection.h"
@@ -231,6 +232,8 @@
 #include "modulation/params/param.h"
 #include "playback/playback_handler.h"
 #include "storage/flash_storage.h"
+#include <array>
+#include <utility>
 
 using enum l10n::String;
 using namespace deluge::modulation;
@@ -633,21 +636,37 @@ PLACE_SDRAM_BSS fx::Clipping clippingMenu{STRING_FOR_SATURATION};
 PLACE_SDRAM_BSS UnpatchedParam srrMenu{STRING_FOR_DECIMATION, params::UNPATCHED_SAMPLE_RATE_REDUCTION,
                                        RenderingStyle::BAR};
 PLACE_SDRAM_BSS UnpatchedParam bitcrushMenu{STRING_FOR_BITCRUSH, params::UNPATCHED_BITCRUSHING, RenderingStyle::BAR};
-PLACE_SDRAM_BSS UnpatchedParam tapeSaturationMenu{STRING_FOR_TAPE, params::UNPATCHED_TAPE_SATURATION,
-                                                  RenderingStyle::BAR};
 PLACE_SDRAM_BSS patched_param::Integer foldMenu{STRING_FOR_WAVEFOLD, STRING_FOR_WAVEFOLD, params::LOCAL_FOLD,
                                                 RenderingStyle::BAR};
 
-PLACE_SDRAM_BSS HorizontalMenu soundDistortionMenu{
-    STRING_FOR_DISTORTION,
-    {
-        &clippingMenu,
-        &bitcrushMenu,
-        &srrMenu,
-        &foldMenu,
-        &tapeSaturationMenu,
-    },
-};
+// Insert-FX plugin params: one knob per bank slot, named by the plugin that owns it (plugin/host/fx_plugin_bank.h).
+// The Distortion menus append the whole bank, so registering a plugin puts its knobs on every Distortion page.
+namespace {
+template <size_t... I>
+std::array<FxPluginParam, sizeof...(I)> makeFxPluginParamMenus(std::index_sequence<I...>) {
+	return {FxPluginParam(I)...};
+}
+} // namespace
+PLACE_SDRAM_BSS std::array<FxPluginParam, params::kNumFxPluginParams> fxPluginParamMenus =
+    makeFxPluginParamMenus(std::make_index_sequence<params::kNumFxPluginParams>{});
+
+namespace {
+template <size_t N>
+std::array<MenuItem*, N + params::kNumFxPluginParams> withFxPluginParamMenus(std::array<MenuItem*, N> items) {
+	std::array<MenuItem*, N + params::kNumFxPluginParams> out{};
+	for (size_t i = 0; i < N; i++) {
+		out[i] = items[i];
+	}
+	for (size_t i = 0; i < params::kNumFxPluginParams; i++) {
+		out[N + i] = &fxPluginParamMenus[i];
+	}
+	return out;
+}
+} // namespace
+
+PLACE_SDRAM_BSS auto soundDistortionItems =
+    withFxPluginParamMenus<4>({&clippingMenu, &bitcrushMenu, &srrMenu, &foldMenu});
+PLACE_SDRAM_BSS HorizontalMenu soundDistortionMenu{STRING_FOR_DISTORTION, soundDistortionItems};
 
 // Output MIDI for sound drums --------------------------------------------------------------
 PLACE_SDRAM_BSS midi::sound::OutputMidiChannel outputMidiChannelMenu{STRING_FOR_CHANNEL, STRING_FOR_CHANNEL};
@@ -837,14 +856,8 @@ PLACE_SDRAM_BSS submenu::ModFxHorizontalMenu globalModFXMenu{
     },
 };
 
-PLACE_SDRAM_BSS HorizontalMenu globalDistortionMenu{
-    STRING_FOR_DISTORTION,
-    {
-        &srrMenu,
-        &bitcrushMenu,
-        &tapeSaturationMenu,
-    },
-};
+PLACE_SDRAM_BSS auto globalDistortionItems = withFxPluginParamMenus<2>({&srrMenu, &bitcrushMenu});
+PLACE_SDRAM_BSS HorizontalMenu globalDistortionMenu{STRING_FOR_DISTORTION, globalDistortionItems};
 
 PLACE_SDRAM_BSS Submenu globalFXMenu{
     STRING_FOR_FX,
@@ -909,15 +922,8 @@ PLACE_SDRAM_BSS HorizontalMenu audioClipMasterMenu{
     {&globalLevelMenu, &globalPanMenu},
 };
 
-PLACE_SDRAM_BSS HorizontalMenu audioClipDistortionMenu{
-    STRING_FOR_DISTORTION,
-    {
-        &clippingMenu,
-        &bitcrushMenu,
-        &srrMenu,
-        &tapeSaturationMenu,
-    },
-};
+PLACE_SDRAM_BSS auto audioClipDistortionMenuItems = withFxPluginParamMenus<3>({&clippingMenu, &bitcrushMenu, &srrMenu});
+PLACE_SDRAM_BSS HorizontalMenu audioClipDistortionMenu{STRING_FOR_DISTORTION, audioClipDistortionMenuItems};
 
 PLACE_SDRAM_BSS Submenu audioClipFXMenu{
     STRING_FOR_FX,

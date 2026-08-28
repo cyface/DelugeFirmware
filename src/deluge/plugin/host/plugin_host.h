@@ -17,21 +17,21 @@
 
 #pragma once
 #include "dsp/stereo_sample.h"
+#include "plugin/host/fx_plugin_bank.h"
 #include "plugin/plugin_abi.h"
+#include <array>
 #include <cstdint>
 #include <span>
+
+class UnpatchedParamSet;
 
 namespace deluge::plugin {
 
 /// The firmware's side of the plugin ABI: the service table every plugin is handed.
 const DelugePluginHostApi& hostApi();
 
-/// Largest per-instance state block a slot can hold. Built-in plugins static_assert against it
-/// (builtin_fx.cpp); a loaded plugin whose descriptor asks for more is refused.
-constexpr uint32_t kFxPluginMaxStateBytes = 64;
-
-/// One insert-FX plugin instance living inside a ModControllableAudio: owns the plugin's state block and
-/// handles the enable/bypass transition so the kernel only ever sees "render while on".
+/// One insert-FX plugin instance: owns the plugin's state block and handles the enable/bypass transition so the
+/// kernel only ever sees "render while on".
 class FxPluginSlot {
 public:
 	explicit FxPluginSlot(const DelugeFxPlugin& plugin) : plugin_(&plugin) {}
@@ -46,6 +46,19 @@ private:
 	const DelugeFxPlugin* plugin_; // pointer, not reference, so owners stay assignable
 	bool active_ = false;
 	alignas(8) uint8_t state_[kFxPluginMaxStateBytes];
+};
+
+/// Every registered insert-FX plugin, instanced once per ModControllableAudio, fed from the param bank.
+class FxPluginChain {
+public:
+	FxPluginChain();
+
+	/// Run each plugin in registry order over `buffer`, reading its params from the bank slots it owns in
+	/// `unpatched`. `levelShift` describes this insertion point (see DelugeFxContext).
+	void process(std::span<StereoSample> buffer, UnpatchedParamSet& unpatched, uint32_t levelShift);
+
+private:
+	std::array<FxPluginSlot, kNumBuiltinFxPlugins> slots_;
 };
 
 } // namespace deluge::plugin

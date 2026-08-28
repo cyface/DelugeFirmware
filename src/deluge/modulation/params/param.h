@@ -171,6 +171,11 @@ static_assert(util::to_underlying(PLACEHOLDER_RANGE) > util::to_underlying(GLOBA
 constexpr ParamType UNPATCHED_START = 90;
 static_assert(UNPATCHED_START > PLACEHOLDER_RANGE, "UNPATCHED params collide with placeholders");
 
+/// Shared unpatched params reserved for insert-FX plugins. plugin/host/fx_plugin_bank.h hands them out to the
+/// registered plugins and names them (display, XML, defaults, menus, automation all derive from the plugin's own
+/// param table). Bump this when the registered plugins' param total changes - the registry static_asserts they agree.
+constexpr ParamType kNumFxPluginParams = 1;
+
 /// IDs for UNPATCHED_* params, for all ModControllables. This is the prefix of UNPATCHED params shared between Sounds
 /// and GlobalEffectables.
 /// ANY TIME YOU UPDATE THIS LIST! paramNameForFile() in param.cpp
@@ -182,8 +187,9 @@ enum UnpatchedShared : ParamType {
 	UNPATCHED_TREBLE_FREQ,
 	UNPATCHED_SAMPLE_RATE_REDUCTION,
 	UNPATCHED_BITCRUSHING,
-	UNPATCHED_TAPE_SATURATION,
-	UNPATCHED_MOD_FX_OFFSET,
+	/// The FX-plugin param bank: kNumFxPluginParams consecutive slots starting here.
+	UNPATCHED_FX_PLUGIN_PARAM_FIRST,
+	UNPATCHED_MOD_FX_OFFSET = UNPATCHED_FX_PLUGIN_PARAM_FIRST + kNumFxPluginParams,
 	UNPATCHED_MOD_FX_FEEDBACK,
 	UNPATCHED_SIDECHAIN_SHAPE,
 	UNPATCHED_COMPRESSOR_THRESHOLD,
