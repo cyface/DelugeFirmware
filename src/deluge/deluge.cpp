@@ -405,8 +405,30 @@ void setupBlankSong() {
 	AudioEngine::mustUpdateReverbParamsBeforeNextRender = true;
 }
 
+namespace {
+/// setupStartupSong() is registered as a conditional "once" task, and loading a song yields back to
+/// the scheduler (see LoadSongUI::performLoad). yield() parks a removeAfterUse task as WAITING_TO_END
+/// so it can't be picked again mid-run, but that parking keys off TaskManager::currentID - which a
+/// nested runTask() call (AudioEngine::runRoutine() dispatches the audio task that way during SD
+/// waits) used to leave pointing at the wrong task, so this task stayed READY and got entered a
+/// second time. The nested call then found the fail-safe canary the first call had only just written
+/// and reported a bogus "Startup fault F1" on every boot. runTask() now restores the caller's
+/// currentID, which fixes the whole class; this guard stays as cheap defense-in-depth, since a second
+/// entry here misfires the canary check rather than just wasting time.
+bool startupSongSetupRunning = false;
+
+struct StartupSongReentryGuard {
+	StartupSongReentryGuard() { startupSongSetupRunning = true; }
+	~StartupSongReentryGuard() { startupSongSetupRunning = false; }
+};
+} // namespace
+
 /// Can only happen after settings, which includes default settings, have been read
 void setupStartupSong() {
+	if (startupSongSetupRunning) {
+		return;
+	}
+	StartupSongReentryGuard reentryGuard;
 
 	auto startupSongMode = FlashStorage::defaultStartupSongMode;
 	auto defaultSongFullPath = "SONGS/DEFAULT.XML";
