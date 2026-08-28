@@ -19,6 +19,7 @@
 #include "gui/menu_item/osc/sync.h"
 #include "gui/menu_item/patch_cables.h"
 #include "gui/menu_item/patched_param/integer_non_fm.h"
+#include "gui/menu_item/plugin/status.h"
 #include "gui/menu_item/randomizer/midi_cv/note_probability.h"
 #include "gui/menu_item/randomizer/midi_cv/spread_velocity.h"
 #include "gui/menu_item/randomizer/randomizer_lock.h"
@@ -78,6 +79,7 @@ extern gui::menu_item::Submenu stemExportMenu;
 extern gui::menu_item::stem_export::Start startStemExportMenu;
 
 extern gui::menu_item::firmware::Version firmwareVersionMenu;
+extern gui::menu_item::plugin::Status pluginStatusMenu;
 extern gui::menu_item::sequence::Direction sequenceDirectionMenu;
 extern gui::menu_item::Submenu soundEditorRootMenuMIDIOrCV;
 extern gui::menu_item::Submenu soundEditorRootMenuMidiDrum;

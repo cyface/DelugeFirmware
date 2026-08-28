@@ -155,6 +155,7 @@
 #include "gui/menu_item/patched_param/integer_non_fm.h"
 #include "gui/menu_item/patched_param/pan.h"
 #include "gui/menu_item/performance_session_view/editing_mode.h"
+#include "gui/menu_item/plugin/status.h"
 #include "gui/menu_item/randomizer/midi_cv/bass_probability.h"
 #include "gui/menu_item/randomizer/midi_cv/chord_polyphony.h"
 #include "gui/menu_item/randomizer/midi_cv/chord_probability.h"
@@ -1064,6 +1065,8 @@ PLACE_SDRAM_BSS firmware::Version firmwareVersionMenu{STRING_FOR_FIRMWARE_VERSIO
 
 PLACE_SDRAM_BSS battery::Level batteryLevelMenu{STRING_FOR_BATTERY_LEVEL, STRING_FOR_BATTERY_LEVEL_MENU_TITLE};
 
+PLACE_SDRAM_BSS deluge::gui::menu_item::plugin::Status pluginStatusMenu{STRING_FOR_PLUGINS};
+
 PLACE_SDRAM_BSS runtime_feature::Settings runtimeFeatureSettingsMenu{STRING_FOR_COMMUNITY_FTS,
                                                                      STRING_FOR_COMMUNITY_FTS_MENU_TITLE};
 
@@ -1920,6 +1923,7 @@ PLACE_SDRAM_BSS Submenu settingsRootMenu{
         &recordSubmenu,
         &runtimeFeatureSettingsMenu,
         &batteryLevelMenu,
+        &pluginStatusMenu,
         &firmwareVersionMenu,
     },
 };
