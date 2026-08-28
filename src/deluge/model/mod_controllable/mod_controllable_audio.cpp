@@ -38,6 +38,8 @@
 #include "model/song/song.h"
 #include "modulation/knob.h"
 #include "modulation/params/param_set.h"
+#include "plugin/fx/tape_saturation.h"
+#include "plugin/host/builtin_fx.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/sound/sound.h"
 #include "storage/storage_manager.h"
@@ -47,7 +49,7 @@ namespace params = deluge::modulation::params;
 
 extern int32_t spareRenderingBuffer[][SSI_TX_BUFFER_NUM_SAMPLES];
 
-ModControllableAudio::ModControllableAudio() {
+ModControllableAudio::ModControllableAudio() : tapeSaturation(deluge::plugin::builtin::kTapeSaturation) {
 
 	// Grain
 
@@ -64,9 +66,6 @@ ModControllableAudio::ModControllableAudio() {
 
 	// Sample rate reduction
 	sampleRateReductionOnLastTime = false;
-
-	// Tape saturation
-	tapeSaturationOnLastTime = false;
 
 	// Saturation
 	clippingAmount = 0;
@@ -383,77 +382,13 @@ bool ModControllableAudio::isTapeSaturationEnabled(ParamManager* paramManager) {
 	return (unpatchedParams->getValue(params::UNPATCHED_TAPE_SATURATION) != -2147483648);
 }
 
-// Tape-style saturation: pre-emphasis (1 - 0.5z^-1) into a slightly biased antialiased tanh, then the exact inverse
-// de-emphasis and a DC blocker. HF gets compressed harder than lows, so drive softens the top end and adds mostly
-// 2nd/3rd harmonic. Small-signal gain stays at unity; drive only lowers the ceiling the peaks get squashed into
-// (6dB per eighth of the knob).
+// The DSP itself is the tape saturation plugin kernel (plugin/fx/tape_saturation.c); this just gathers what the
+// host owes it: the knob, whether it is on, and how hot this insertion point runs.
 void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer, ParamManager* paramManager) {
-	if (!isTapeSaturationEnabled(paramManager)) {
-		tapeSaturationOnLastTime = false;
-		return;
-	}
-
-	if (!tapeSaturationOnLastTime) {
-		tapeSaturationOnLastTime = true;
-		tapeSatPreEmphLast.l = tapeSatPreEmphLast.r = 0;
-		tapeSatDeEmphLast.l = tapeSatDeEmphLast.r = 0;
-		tapeSatDCBlock.l = tapeSatDCBlock.r = 0;
-		tapeSatTanHWorkingValue[0] = tapeSatTanHWorkingValue[1] = 2147483648u;
-	}
-
-	uint32_t positive =
-	    (uint32_t)paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION) + 2147483648u;
-
-	// Drive is fineGain * 2^driveShift, continuous across the whole knob. The context-specific base (see
-	// getTapeSaturationDriveBase) anchors the knob to that insertion point's real internal levels, which sit well
-	// below q31 full scale; 2 of its steps undo the /4 inherent in the q30 fine-gain multiply.
-	uint32_t driveBase = getTapeSaturationDriveBase();
-	uint32_t saturationAmount = (positive >> 29) + driveBase;
-	int32_t fineGain = (int32_t)((1u << 30) + ((positive & 0x1FFFFFFF) << 1)); // q30, [1.0, 2.0)
-
-	// Post-shape makeup. 1154084861100017408 = (8 / 1.998) * 2^58, with 1.998 the measured centre slope of tanH2d.
-	// Below the crossover (75% of the knob), gain is 8 / (tableSlope * fineGain) - unity small-signal gain, with
-	// drive lowering the ceiling peaks squash into. Above it the ceiling holds and small-signal gain rises 6dB per
-	// step instead (g = 2^(sat-crossover) * fineGain, exactly 1.0 at the boundary, so the knob sweep stays
-	// continuous): quiet sources get pushed up into the shaper rather than the ceiling dropping below their reach.
-	uint32_t crossover = driveBase + 6;
-	int32_t makeupGain;
-	int32_t makeupShift;
-	if (saturationAmount >= crossover) {
-		makeupGain = (int32_t)(1154084861100017408uLL >> 30);
-		makeupShift = 4 + (int32_t)(saturationAmount - crossover);
-	}
-	else {
-		makeupGain = (int32_t)(1154084861100017408uLL / (uint32_t)fineGain);
-		makeupShift = 4;
-	}
-
-	// A little input bias makes the shaper asymmetric for 2nd-harmonic warmth; the static output offset is
-	// subtracted straight back out and the DC blocker catches the signal-dependent remainder.
-	int32_t biasInput = (int32_t)(positive >> 5) >> saturationAmount;
-	int32_t outOffset = getTanHUnknown(biasInput, saturationAmount);
-
-	for (StereoSample& sample : buffer) {
-		int32_t* channels[2] = {&sample.l, &sample.r};
-		int32_t* preEmphLast[2] = {&tapeSatPreEmphLast.l, &tapeSatPreEmphLast.r};
-		int32_t* deEmphLast[2] = {&tapeSatDeEmphLast.l, &tapeSatDeEmphLast.r};
-		int32_t* dcBlock[2] = {&tapeSatDCBlock.l, &tapeSatDCBlock.r};
-
-		for (int32_t ch = 0; ch < 2; ch++) {
-			int32_t x = *channels[ch];
-			int32_t pre = (x >> 1) - (*preEmphLast[ch] >> 2); // halved for headroom; de-emphasis restores it
-			*preEmphLast[ch] = x;
-			int32_t driven = multiply_32x32_rshift32(pre, fineGain);
-			int32_t shaped =
-			    getTanHAntialiased(driven + biasInput, &tapeSatTanHWorkingValue[ch], saturationAmount) - outOffset;
-			shaped = multiply_32x32_rshift32(shaped, makeupGain) << makeupShift;
-			int32_t de = shaped + (*deEmphLast[ch] >> 1);
-			*deEmphLast[ch] = de;
-			int32_t y = de << 1;
-			*dcBlock[ch] += (y - *dcBlock[ch]) >> 8;
-			*channels[ch] = y - *dcBlock[ch];
-		}
-	}
+	int32_t pluginParams[TAPE_SATURATION_NUM_PARAMS];
+	pluginParams[TAPE_SATURATION_PARAM_AMOUNT] =
+	    paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION);
+	tapeSaturation.process(buffer, pluginParams, isTapeSaturationEnabled(paramManager), getTapeSaturationDriveBase());
 }
 
 inline void ModControllableAudio::doEQ(bool doBass, bool doTreble, int32_t* inputL, int32_t* inputR, int32_t bassAmount,
