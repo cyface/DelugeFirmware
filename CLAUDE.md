@@ -16,6 +16,12 @@ Tim's fork of the Synthstrom Audible Deluge firmware (C++, ARM bare-metal).
   push to `origin`, then merge `main` into `local-fixes`.
 - New fixes/features get their own branch **cut from `main`** (so they stay PR-able
   upstream), then get **merged** into `local-fixes`.
+- **Plugin work (new insert FX, source plugins, loader) branches from `feature/plugin-architecture`,
+  not from `main`.** That branch (cut from `main`) is the tier-1 plugin ABI: `src/deluge/plugin/`
+  (ABI header, host API, param bank, freestanding-blob check, README) with tape saturation as the
+  reference FX. Its content is already in `local-fixes`, so a branch stacked on it merges cleanly.
+  Read `src/deluge/plugin/README.md` first; adding an FX is kernel + descriptor + one registry
+  line + bumping `params::kNumFxPluginParams`.
 - `local-fixes` is the accumulator branch that gets built and flashed to hardware.
   It is merge-based — never rebase it. Merging a new fix branch often conflicts in
   shared registration points (settings enums, menu arrays, l10n files); resolve by
