@@ -437,6 +437,7 @@ PLACE_SDRAM_DATA Language english{
         {STRING_FOR_OSC_SAMPLE_MENU_TITLE, "Osc* sample"},
         {STRING_FOR_PLAY_CURSOR, "Play-Cursor"},
         {STRING_FOR_FIRMWARE_VERSION, "Firmware Version"},
+        {STRING_FOR_PLUGINS, "Plugins"},
         {STRING_FOR_BATTERY_LEVEL, "Battery level"},
         {STRING_FOR_COMMUNITY_FTS, "Community Features"},
         {STRING_FOR_MIDI_THRU, "MIDI-Thru"},

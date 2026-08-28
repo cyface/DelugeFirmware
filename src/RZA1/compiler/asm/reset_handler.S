@@ -110,6 +110,15 @@ goToSleep:
     CPS  #ABT_MODE
     LDR  sp, =abt_stack_end
 
+/* UND_MODE                                                                  */
+/* Undefined-instruction mode had no stack pointer, so the fault handler's   */
+/* own prologue push data-aborted and every undefined instruction was        */
+/* reported as a fault inside the fault handler rather than where it         */
+/* happened. It shares the abort stack: neither mode ever returns, so the    */
+/* two cannot nest.                                                          */
+    CPS  #UND_MODE
+    LDR  sp, =abt_stack_end
+
 /* SYS_MODE                                                                  */
     CPS  #SYS_MODE
 

@@ -151,13 +151,40 @@ first call into the blob happens at boot rather than mid-song.
 Replacing a built-in is all the loader does. A plugin with no built-in behind it - a new FX, a new oscillator
 type - needs the registry to become dynamic, which is step 4 of the issue.
 
-Verified in DelugEmu (2026-08-28, both reference kernels in `PLUGINS/`): both load and install, code at
-`0x0fe08ca0` / `0x0fe0b340` in SDRAM, self-checks identical to the built-ins (`0x1dec0767`, `0xc6da39af`), the
-menus' model strings read out of the blob (patching "Hi-hat 2" to "LOADED!!" in the file and restamping the CRC
-changed what the firmware reported), and a blob with `abiVersion` bumped to 4 was refused with the built-in kept.
-Loading also flushed out a long-standing firmware bug: `l1_cache_operation.s` declared a custom section the
-linker script does not map, so `L1_I_CacheFlushAll()` sat at VMA 0 and hard-faulted when called (the fix is
-cherry-picked here from the #37 spike branch).
+### When a plugin misbehaves
+
+Code from the card can crash the Deluge, so the failure cases are part of the feature:
+
+- **Settings > Plugins** lists every file the scan saw and what became of it (`Drum: loaded`,
+  `x.dlp: wrong ABI`). Nothing else in the firmware tells you whether the plugin you copied on is the one making
+  the sound.
+- **A refusal is announced**, a few seconds after boot once the UI exists: a popup naming the file that did not
+  load, or a quiet console line when everything loaded. A blob built against another `abiVersion` lands here.
+- **A canary** (`PLUGINS/CANARY.TXT`, the same trick the startup song uses) names the plugin about to be called
+  for the very first time and is deleted once that call returns. If the Deluge never comes back, the next boot
+  finds the canary, leaves that plugin alone, says so, and clears it - so the boot loop a bad blob would otherwise
+  cause heals itself, and the boot after that tries the plugin again in case it was replaced.
+- **Safe boot**: holding SHIFT at power-on skips `PLUGINS/` entirely. The canary only covers a crash during the
+  load; this covers everything else, and needs no computer.
+- **Fault attribution**: the loader registers each plugin's address range with the fault handler, so a fault
+  inside plugin code is drawn on the pads in red (the handler used to discard the address entirely - it is not in
+  the firmware's `.text`) and, once the Deluge has finished booting, the display names the plugin
+  (`Error: PLUG Drum`).
+
+Two dormant firmware bugs surfaced while testing this, both fixed on this branch: `l1_cache_operation.s` was
+linked at VMA 0, so `L1_I_CacheFlushAll()` - which the loader needs - hard-faulted; and undefined-instruction
+mode never had a stack pointer, so *every* undefined instruction was reported as a fault inside the fault handler
+rather than where it happened (which is exactly what executing a damaged plugin looks like).
+
+Verified in DelugEmu (2026-08-28, both reference kernels in `PLUGINS/`): both load and install, code in SDRAM,
+self-checks identical to the built-ins (`0x1dec0767`, `0xc6da39af`), the menus' model strings read out of the blob
+(patching "Hi-hat 2" to "LOADED!!" in the file and restamping the CRC changed what the firmware reported), a blob
+with `abiVersion` bumped to 4 refused with the built-in kept, and macOS `._name.dlp` twins skipped. The failure
+handling was tested with a blob whose render entry point was pointed at a deliberately undefined instruction:
+the fault screen drew the address inside the plugin in red, the canary survived to the next boot, that boot
+skipped the plugin and came up with `Plugin crashed, skipped: plaits_drums.dlp`, and the boot after it tried the
+plugin again. The SHIFT gesture is the one part the emulator cannot test - it ignores the firmware's
+"resend button states" request - so that needs a look on hardware.
 
 **Param-bank policy for loaded FX: fixed at boot.** A loaded FX gets its slots in `params::kNumFxPluginParams`
 the same way a built-in does - in registry order, decided once during the boot scan - rather than being assigned
@@ -183,10 +210,8 @@ The drums were ported with the loader in mind, so the remaining gap is known:
   the host keeps hits varied and the blob relocation-free.
 - **Scratch is a host loan.** Kernels that need more working memory than a voice should hold ask for
   it per call (`scratchSize`) instead of keeping `static` buffers.
-- Still open (fork issue #41): telling the *user* what happened (the load report exists, nothing shows it yet), a
-  safe boot that skips `PLUGINS/` so a bad blob cannot spoil the boot loop, naming the plugin on the error screen
-  when a fault happens inside one, and letting a loaded plugin register a new `OscType`/menu entry rather than
-  only replacing a built-in.
+- Still open (fork issue #41 step 4): letting a loaded plugin register a *new* `OscType` or FX rather than only
+  replacing a built-in, and giving each FX its own menu category (today they all land in Distortion).
 
 ## Adding an insert FX
 

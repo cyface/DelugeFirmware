@@ -59,6 +59,13 @@
 extern "C" {
 #endif
 
+/// Tell the fault handler that [start, end) holds code loaded at runtime - a plugin kernel from PLUGINS/ running
+/// from SDRAM (plugin/host/plugin_loader.h). Without this a fault inside one shows nothing at all: the handler
+/// only draws pointers it recognises as code, and a plugin lives outside the firmware's own .text. `description`
+/// is shown on the display if the fault turns out to be in this image, so it must outlive the call and start with
+/// something legible in four characters (the 7-segment display gets no more).
+extern void faultHandlerRegisterPluginImage(uint32_t start, uint32_t end, const char* description);
+
 extern void fault_handler_print_freeze_pointers(uint32_t addrSYSLR, uint32_t addrSYSSP, uint32_t addrUSRLR,
                                                 uint32_t addrUSRSP);
 extern void handle_cpu_fault(uint32_t addrSYSLR, uint32_t addrSYSSP, uint32_t addrUSRLR, uint32_t addrUSRSP);

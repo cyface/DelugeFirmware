@@ -36,17 +36,19 @@ namespace deluge::plugin {
 /// Why a file in PLUGINS/ is or is not running. Ordered roughly "the file is wrong" -> "the file is fine but this
 /// firmware cannot use it".
 enum class PluginLoadStatus : uint8_t {
-	loaded = 0,   ///< bound and swapped in for the built-in of the same name
-	unreadable,   ///< the card would not give us the bytes
-	tooBig,       ///< larger than kMaxPluginFileBytes
-	noMemory,     ///< no SDRAM to put it in
-	notAPlugin,   ///< no "DLPB" magic: some other file that happens to end in .dlp
-	badFormat,    ///< a container version this firmware does not know
-	badAbi,       ///< built against a different plugin ABI (the handshake that keeps stale blobs out)
-	damaged,      ///< CRC mismatch, or an offset or entry point that does not fit the file
-	unknown,      ///< valid, but names no built-in plugin: nothing to replace (issue #41 step 4)
-	incompatible, ///< names a built-in, but does not fit the host (param table, state size, block size...)
-	duplicate,    ///< a second file claiming a plugin an earlier one already replaced
+	loaded = 0,    ///< bound and swapped in for the built-in of the same name
+	unreadable,    ///< the card would not give us the bytes
+	tooBig,        ///< larger than kMaxPluginFileBytes
+	noMemory,      ///< no SDRAM to put it in
+	notAPlugin,    ///< no "DLPB" magic: some other file that happens to end in .dlp
+	badFormat,     ///< a container version this firmware does not know
+	badAbi,        ///< built against a different plugin ABI (the handshake that keeps stale blobs out)
+	damaged,       ///< CRC mismatch, or an offset or entry point that does not fit the file
+	unknown,       ///< valid, but names no built-in plugin: nothing to replace (issue #41 step 4)
+	incompatible,  ///< names a built-in, but does not fit the host (param table, state size, block size...)
+	duplicate,     ///< a second file claiming a plugin an earlier one already replaced
+	skipped,       ///< safe boot: the scan did not happen at all
+	crashedBefore, ///< the last boot did not survive this plugin, so this one leaves it alone
 };
 
 /// How far the loader got with a file. It is written into the record *before* each step, so if a plugin brings the
@@ -78,6 +80,9 @@ struct PluginLoadRecord {
 	/// which is the point when the card is carrying a copy of a kernel the firmware already has.
 	uint32_t checksum;
 	uint32_t builtinChecksum;
+	/// What the error screen says if the firmware faults inside this plugin's code ("PLUG <name>"): the fault
+	/// handler keeps the pointer, so it has to live here rather than on a stack somewhere.
+	char faultText[20];
 };
 
 /// The most one .dlp may be, and the most files the scan looks at (both generous: the two reference kernels are
@@ -87,9 +92,15 @@ inline constexpr uint32_t kMaxPluginFiles = 8;
 /// Most models a loaded source plugin may declare (the built-in drum plugin has 6).
 inline constexpr uint32_t kMaxLoadedSourceModels = 16;
 
+/// What to call a status where a person will read it (the Settings > Plugins list).
+const char* describe(PluginLoadStatus status);
+
 /// Scan PLUGINS/ and install what it finds. Call once at boot, after the card is readable and before anything has
 /// asked for a descriptor - no voice, FX chain or menu may exist yet.
-void loadPluginsFromCard();
+///
+/// `safeBoot` skips the scan entirely (the user held SHIFT at power-on): the way back from a plugin that crashes
+/// the Deluge before there is any UI to turn it off with.
+void loadPluginsFromCard(bool safeBoot);
 
 /// What the scan did, in the order the files were read.
 std::span<const PluginLoadRecord> pluginLoadReport();

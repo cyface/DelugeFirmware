@@ -61,6 +61,10 @@
 #include "drivers/uart/uart.h"
 #include <version.h>
 
+/// Set once the Deluge has finished coming up (deluge.cpp). Before that the display is still being brought up and
+/// driving it from a fault handler faults again - which loses the pad display we just drew.
+extern uint8_t usbInitializationPeriodComplete;
+
 extern uint32_t program_stack_start;
 extern uint32_t program_stack_end;
 extern uint32_t program_code_start;
@@ -121,12 +125,42 @@ extern uint32_t program_code_end;
 	return false;
 }
 
+// Code that arrived at runtime: plugin kernels loaded from the card, executing from SDRAM outside the firmware's
+// own .text. Registered by the plugin loader, read here so a fault inside a plugin is recognised and named.
+#define MAX_PLUGIN_IMAGES 4
+static struct {
+	uint32_t start;
+	uint32_t end;
+	const char* description;
+} pluginImages[MAX_PLUGIN_IMAGES];
+static uint32_t numPluginImages = 0;
+
+void faultHandlerRegisterPluginImage(uint32_t start, uint32_t end, const char* description) {
+	if (numPluginImages < MAX_PLUGIN_IMAGES) {
+		pluginImages[numPluginImages].start = start;
+		pluginImages[numPluginImages].end = end;
+		pluginImages[numPluginImages].description = description;
+		++numPluginImages;
+	}
+}
+
+/// Which loaded plugin's code contains this address, or -1. The addresses that reach here are link registers -
+/// they point *after* the instruction that faulted or called - so one past the end of an image still belongs to it.
+[[gnu::always_inline]] inline int32_t pluginImageIndex(uint32_t value) {
+	for (uint32_t i = 0; i < numPluginImages; ++i) {
+		if (value >= pluginImages[i].start && value <= pluginImages[i].end) {
+			return (int32_t)i;
+		}
+	}
+	return -1;
+}
+
 [[gnu::always_inline]] inline bool isCodePointer(uint32_t value) {
 	if (value >= (uint32_t)&program_code_start && value < (uint32_t)&program_code_end) {
 		return true;
 	}
 
-	return false;
+	return pluginImageIndex(value) >= 0;
 }
 
 [[gnu::always_inline]] inline uint8_t getHexCharValue(char input) {
@@ -179,14 +213,18 @@ extern uint32_t program_code_end;
 
 	uint32_t currentColumnPairIndex = 0;
 
-	// Print LR from USR mode if it is valid
+	// Print LR from USR mode if it is valid. Red rather than the usual colour when it points inside a plugin
+	// loaded from the card, so "this fault was not in the firmware" is visible at a glance.
 	if (isCodePointer(addrUSRLR)) {
-		currentColumnPairIndex = drawPointer(currentColumnPairIndex, addrUSRLR, 255, 0, 255);
+		bool inPlugin = pluginImageIndex(addrUSRLR) >= 0;
+		currentColumnPairIndex = drawPointer(currentColumnPairIndex, addrUSRLR, 255, 0, inPlugin ? 0 : 255);
 	}
 
 	// Print LR from SYS mode if it is valid and different from USR mode
 	if (isCodePointer(addrSYSLR) && addrSYSLR != addrUSRLR) {
-		currentColumnPairIndex = drawPointer(currentColumnPairIndex, addrSYSLR, 0, 0, 255);
+		bool inPlugin = pluginImageIndex(addrSYSLR) >= 0;
+		currentColumnPairIndex =
+		    drawPointer(currentColumnPairIndex, addrSYSLR, inPlugin ? 255 : 0, 0, inPlugin ? 0 : 255);
 	}
 
 	// Print all pointers
@@ -255,6 +293,17 @@ extern void fault_handler_print_freeze_pointers(uint32_t addrSYSLR, uint32_t add
 extern void handle_cpu_fault(uint32_t addrSYSLR, uint32_t addrSYSSP, uint32_t addrUSRLR, uint32_t addrUSRSP) {
 	printPointers(addrSYSLR, addrSYSSP, addrUSRLR, addrUSRSP, true);
 	clearTxBuffer();
+
+	// The pads show addresses; an address in SDRAM tells the person holding the Deluge nothing. If the fault was
+	// inside a plugin loaded from the card, name it on the display - the one thing they can act on (take the file
+	// out of PLUGINS/, or boot holding SHIFT).
+	int32_t plugin = pluginImageIndex(addrSYSLR);
+	if (plugin < 0) {
+		plugin = pluginImageIndex(addrUSRLR);
+	}
+	if (plugin >= 0 && usbInitializationPeriodComplete != 0) {
+		freezeWithError(pluginImages[plugin].description);
+	}
 	// if we start using user mode then we'd want to do this to get an accurate call stack. We don't so just don't
 	//__asm__("CPS  0x10"); // Go to USR mode
 

@@ -16,6 +16,9 @@
  */
 
 #include "plugin/host/plugin_loader.h"
+#include "OSLikeStuff/fault_handler/fault_handler.h"
+#include "OSLikeStuff/scheduler_api.h"
+#include "hid/display/display.h"
 #include "io/debug/log.h"
 #include "memory/memory_allocator_interface.h"
 #include "plugin/host/plugin_host.h"
@@ -34,6 +37,9 @@ namespace {
 
 constexpr char kPluginDirectory[] = "PLUGINS"; // an array, so the path buffer below can be sized from it
 
+/// Names the plugin currently being run for the first time. Left behind on the card if that call never returns.
+constexpr char kCanaryPath[] = "PLUGINS/CANARY.TXT";
+
 PluginLoadRecord records[kMaxPluginFiles];
 uint32_t numRecords = 0;
 
@@ -45,6 +51,74 @@ bool fxSlotLoaded[kNumBuiltinFxPlugins];
 DelugeSourcePlugin loadedSource;
 DelugeSourceModelInfo loadedSourceModels[kMaxLoadedSourceModels];
 bool sourceLoaded;
+
+// What the user is told once the UI is up, if there is anything worth telling. Static because a popup keeps the
+// pointer, and because this is written during the boot scan and read seconds later.
+char noticeShort[8]; // 7-segment popup text; empty means the notice is a console line, not a popup
+char noticeLong[48];
+
+/// Seconds to wait before saying anything: the startup song is still loading, and a popup raised during setup()
+/// is drawn over by the first thing the UI does.
+constexpr double kNoticeDelay = 8.0;
+
+void appendText(char* destination, uint32_t size, const char* source) {
+	uint32_t length = 0;
+	while (destination[length] != 0 && length + 1 < size) {
+		length++;
+	}
+	for (; source != nullptr && *source != 0 && length + 1 < size; source++, length++) {
+		destination[length] = *source;
+	}
+	destination[length] = 0;
+}
+
+/// Run seconds after boot, from the scheduler, because a popup raised during setup() is drawn over by the first
+/// thing the UI does.
+void showLoadNotice() {
+	if (noticeLong[0] == 0) {
+		return;
+	}
+	if (noticeShort[0] != 0) {
+		const char* shortLong[2] = {noticeShort, noticeLong};
+		display->displayPopup(shortLong);
+	}
+	else if (display->haveOLED()) {
+		display->consoleText(noticeLong); // all is well: visible, but not in the way
+	}
+}
+
+/// Leave a canary on the card naming the plugin about to be called for the first time. If the Deluge never comes
+/// back from that call, the file is still there on the next boot and that plugin is left alone - so the boot loop
+/// a bad blob could otherwise cause heals itself, without the user having to know about the SHIFT gesture. Same
+/// idea as the startup-song canary in deluge.cpp.
+void writeCanary(const char* fileName) {
+	FIL file;
+	if (f_open(&file, kCanaryPath, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK) {
+		return;
+	}
+	UINT written = 0;
+	f_write(&file, fileName, strlen(fileName), &written);
+	f_close(&file);
+}
+
+void clearCanary() {
+	f_unlink(kCanaryPath);
+}
+
+/// The plugin file named by a canary a previous boot left behind, or "" if that boot got through its plugins.
+void readCanary(char* out, uint32_t size) {
+	out[0] = 0;
+	FIL file;
+	if (f_open(&file, kCanaryPath, FA_READ) != FR_OK) {
+		return;
+	}
+	UINT got = 0;
+	if (f_read(&file, out, size - 1, &got) != FR_OK) {
+		got = 0;
+	}
+	out[got] = 0;
+	f_close(&file);
+}
 
 void copyName(char* destination, uint32_t size, const char* source) {
 	uint32_t i = 0;
@@ -115,6 +189,15 @@ bool loadedFxMatchesBuiltin(const DelugeFxPlugin& loaded, const DelugeFxPlugin& 
 	return true;
 }
 
+/// Hand the plugin's address range to the fault handler, with the text the error screen should show. From here
+/// on, a fault inside this plugin says so instead of freezing on an address nobody can place.
+void nameTheImageForFaults(PluginLoadRecord& record, uint32_t imageSize) {
+	record.faultText[0] = 0;
+	appendText(record.faultText, sizeof(record.faultText), "PLUG "); // the 7-segment display shows these 4 letters
+	appendText(record.faultText, sizeof(record.faultText), record.name);
+	faultHandlerRegisterPluginImage(record.imageAddress, record.imageAddress + imageSize, record.faultText);
+}
+
 PluginLoadStatus bindAndInstall(const uint8_t* file, PluginLoadRecord& record) {
 	const auto* header = reinterpret_cast<const DelugePluginBlobHeader*>(file);
 	const void* image = file + header->imageOffset;
@@ -143,15 +226,18 @@ PluginLoadStatus bindAndInstall(const uint8_t* file, PluginLoadRecord& record) {
 		}
 		record.stage = PluginLoadStage::revealing;
 		makeCodeVisible(image, header->imageSize);
+		record.imageAddress = reinterpret_cast<uintptr_t>(image);
+		nameTheImageForFaults(record, header->imageSize); // before the first call, so that call is attributable
 		record.stage = PluginLoadStage::running;
 		// First call into the blob: if the copy or the cache maintenance were wrong, this is where it shows, at
-		// boot rather than in the middle of a song.
+		// boot rather than in the middle of a song. The canary is what makes that survivable.
+		writeCanary(record.file);
 		record.checksum = selfCheck(plugin);
 		record.builtinChecksum = selfCheck(*kBuiltinFxPlugins[index]);
+		clearCanary();
 		record.stage = PluginLoadStage::installed;
 		fxSlotLoaded[index] = true;
 		installLoadedFxPlugin(static_cast<uint32_t>(index), plugin);
-		record.imageAddress = reinterpret_cast<uintptr_t>(image);
 		return PluginLoadStatus::loaded;
 	}
 
@@ -174,13 +260,16 @@ PluginLoadStatus bindAndInstall(const uint8_t* file, PluginLoadRecord& record) {
 	}
 	record.stage = PluginLoadStage::revealing;
 	makeCodeVisible(image, header->imageSize);
+	record.imageAddress = reinterpret_cast<uintptr_t>(image);
+	nameTheImageForFaults(record, header->imageSize); // before the first call, so that call is attributable
 	record.stage = PluginLoadStage::running;
+	writeCanary(record.file);
 	record.checksum = selfCheck(loadedSource);
 	record.builtinChecksum = selfCheck(kBuiltinDrumSourcePlugin);
+	clearCanary();
 	record.stage = PluginLoadStage::installed;
 	sourceLoaded = true;
 	installLoadedSourcePlugin(loadedSource);
-	record.imageAddress = reinterpret_cast<uintptr_t>(image);
 	return PluginLoadStatus::loaded;
 }
 
@@ -230,12 +319,73 @@ PluginLoadStatus loadOneFile(const char* fileName, uint32_t fileSize, PluginLoad
 	return status;
 }
 
+/// Tell the user what happened, if it is worth telling: a plugin that did not load is the whole reason the ABI
+/// version is in the file, and saying nothing would leave them wondering why the Deluge sounds like it did before.
+void announce() {
+	uint32_t loaded = 0;
+	const PluginLoadRecord* problem = nullptr;
+	bool safeBoot = false;
+	for (uint32_t i = 0; i < numRecords; i++) {
+		if (records[i].status == PluginLoadStatus::loaded) {
+			loaded++;
+		}
+		else if (records[i].status == PluginLoadStatus::skipped) {
+			safeBoot = true;
+		}
+		else if (problem == nullptr) {
+			problem = &records[i];
+		}
+	}
+	noticeShort[0] = 0;
+	noticeLong[0] = 0;
+	if (safeBoot) {
+		appendText(noticeShort, sizeof(noticeShort), "SKIP");
+		appendText(noticeLong, sizeof(noticeLong), "Plugins skipped");
+	}
+	else if (problem != nullptr && problem->status == PluginLoadStatus::crashedBefore) {
+		appendText(noticeShort, sizeof(noticeShort), "CRSH");
+		appendText(noticeLong, sizeof(noticeLong), "Plugin crashed, skipped: ");
+		appendText(noticeLong, sizeof(noticeLong), problem->file);
+	}
+	else if (problem != nullptr) {
+		appendText(noticeShort, sizeof(noticeShort), "PLUG");
+		appendText(noticeLong, sizeof(noticeLong), "Plugin not loaded: ");
+		appendText(noticeLong, sizeof(noticeLong), problem->file);
+	}
+	else if (loaded > 0) {
+		// A console line, no popup: worth confirming, not worth interrupting for.
+		appendText(noticeLong, sizeof(noticeLong), loaded == 1 ? "1 plugin loaded" : "Plugins loaded");
+	}
+	else {
+		return; // nothing on the card at all, which is the normal case and not worth a word
+	}
+	addOnceTask(showLoadNotice, 100, kNoticeDelay, "plugin load notice", RESOURCE_NONE);
+}
+
 } // namespace
 
-void loadPluginsFromCard() {
+void loadPluginsFromCard(bool safeBoot) {
 	numRecords = 0;
+	if (safeBoot) {
+		// SHIFT was held at power-on. Nothing is read, so a plugin that crashes the Deluge cannot keep it from
+		// booting - which is the only state in which the user has no other way out.
+		PluginLoadRecord& record = records[numRecords++];
+		record = PluginLoadRecord{};
+		copyName(record.file, sizeof(record.file), kPluginDirectory);
+		record.status = PluginLoadStatus::skipped;
+		D_PRINTLN("plugins skipped: safe boot");
+		announce();
+		return;
+	}
 	if (f_opendir(&staticDIR.inner(), kPluginDirectory) != FR_OK) {
 		return; // no PLUGINS/ on this card, which is the normal case
+	}
+	// Whatever the last boot was running when it stopped. Cleared now rather than after the scan, so a plugin is
+	// only ever skipped for one boot: the user may have replaced the file, and we should let it try again.
+	char crashedFile[sizeof(records[0].file)];
+	readCanary(crashedFile, sizeof(crashedFile));
+	if (crashedFile[0] != 0) {
+		clearCanary();
 	}
 	while (numRecords < kMaxPluginFiles) {
 		if (f_readdir(&staticDIR.inner(), &staticFNO) != FR_OK || staticFNO.fname[0] == 0) {
@@ -248,13 +398,51 @@ void loadPluginsFromCard() {
 		record = PluginLoadRecord{};
 		copyName(record.file, sizeof(record.file), staticFNO.fname);
 		record.fileSize = static_cast<uint32_t>(staticFNO.fsize);
-		record.status = loadOneFile(staticFNO.fname, record.fileSize, record);
+		if (crashedFile[0] != 0 && strcasecmp(staticFNO.fname, crashedFile) == 0) {
+			record.status = PluginLoadStatus::crashedBefore;
+		}
+		else {
+			record.status = loadOneFile(staticFNO.fname, record.fileSize, record);
+		}
 		numRecords++;
 		D_PRINTLN("plugin %s: name %s, status %d, %d bytes at 0x%08x, check 0x%08x vs built-in 0x%08x", record.file,
 		          record.name, static_cast<int32_t>(record.status), record.imageSize, record.imageAddress,
 		          record.checksum, record.builtinChecksum);
 	}
 	f_closedir(&staticDIR.inner());
+	announce();
+}
+
+const char* describe(PluginLoadStatus status) {
+	switch (status) {
+	case PluginLoadStatus::loaded:
+		return "loaded";
+	case PluginLoadStatus::unreadable:
+		return "unreadable";
+	case PluginLoadStatus::tooBig:
+		return "too big";
+	case PluginLoadStatus::noMemory:
+		return "no memory";
+	case PluginLoadStatus::notAPlugin:
+		return "not a plugin";
+	case PluginLoadStatus::badFormat:
+		return "newer format";
+	case PluginLoadStatus::badAbi:
+		return "wrong ABI";
+	case PluginLoadStatus::damaged:
+		return "damaged";
+	case PluginLoadStatus::unknown:
+		return "unknown name";
+	case PluginLoadStatus::incompatible:
+		return "incompatible";
+	case PluginLoadStatus::duplicate:
+		return "duplicate";
+	case PluginLoadStatus::skipped:
+		return "skipped: SHIFT";
+	case PluginLoadStatus::crashedBefore:
+		return "crashed: skipped";
+	}
+	return "?";
 }
 
 std::span<const PluginLoadRecord> pluginLoadReport() {
