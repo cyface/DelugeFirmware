@@ -67,10 +67,15 @@ The effect is the first kernel written against the tier-1 plugin ABI (`src/delug
   function table; the fixed-point multiply is spelled as a 64-bit product shift (what `smmul` does),
   and the q58 makeup division is a shift-subtract loop because Cortex-A9 has no divide instruction
   and a `/` would import libgcc into a blob.
-- `plugin/host/builtin_fx.cpp` - its `DelugeFxPlugin` descriptor (`kTapeSaturation`).
-- `ModControllableAudio` holds an `FxPluginSlot` for it, which owns the 32-byte state block and does
-  the off→on reset. `processTapeSaturation()` is now only the host glue: read the knob, decide
-  enabled, pass `getTapeSaturationDriveBase()` as the context's `levelShift`.
+- `plugin/host/builtin_fx.h` - its `DelugeFxPlugin` descriptor (`kTapeSaturation`) including the
+  param table: `{"Tape", "TAPE", "tapeSaturation", off}`. That one line is where the menu label, the
+  7-segment label, the XML attribute and the preset default all come from now.
+- The knob is slot 0 of the shared FX-plugin param bank (`UNPATCHED_FX_PLUGIN_PARAM_FIRST`, see
+  `plugin/host/fx_plugin_bank.h`); there is no `UNPATCHED_TAPE_SATURATION` any more.
+- `ModControllableAudio` holds an `FxPluginChain`, which owns a 32-byte state block per plugin and does
+  the off→on reset. `processFxPlugins()` is the only host glue: hand the chain the unpatched param set
+  and `getFxPluginLevelShift()` as the context's `levelShift`. `tape_saturation_is_active()` tells the
+  host the knob at minimum means bypass.
 
 The move is bit-exact: a native harness ran the pre-refactor inline code and the kernel side by side
 (same deterministic table stand-ins) over 3960 random blocks - all three drive bases, every knob
@@ -138,17 +143,15 @@ End-to-end check on a real song in the emulator: master Tape at 30/50 tamed a mi
 touching digital full scale by ~6dB of soft peak limiting at roughly constant loudness (crest
 factor 6 → 4), with no audible artifacts — the intended "bus glue" behaviour.
 
-## Integration points (checklist for similar params)
+## Integration points
 
-Adding the shared unpatched param touched: `param.h` (enum `UNPATCHED_TAPE_SATURATION`, inserted
-after `UNPATCHED_BITCRUSHING` — safe because files serialize params by name), `param.cpp` (display
-name + `paramNameForFile` → `"tapeSaturation"`), `strings.h` + `english.json` +
-`seven_segment.json` (the `g_*.cpp` files are build-generated), `mod_controllable_audio.*`
-(default value in `initParams`, the `FxPluginSlot`, host glue, read/write param tags), `menus.cpp`
-(menu item + the three Distortion horizontal menus), and `automation_view.cpp` (both param lists and
-their counts). The DSP itself lives in `plugin/fx/tape_saturation.c`.
-Context-specific behaviour hangs off the `getTapeSaturationDriveBase()` virtual, overridden in
-`sound.h` and `global_effectable_for_clip.h`.
+Historically the shared unpatched param touched `param.h`, `param.cpp` (display name +
+`paramNameForFile`), `strings.h` + `english.json` + `seven_segment.json`, `mod_controllable_audio.*`
+(default, DSP, read/write tags), `menus.cpp` (item + three Distortion menus) and `automation_view.cpp`
+(both lists + counts). All of that is now derived from the plugin's param table through the FX-plugin
+param bank - see `src/deluge/plugin/README.md`. What remains tape-specific is the kernel, its one-line
+descriptor, and the per-context level anchoring (`getFxPluginLevelShift()`, overridden in `sound.h`
+and `global_effectable_for_clip.h`).
 Not mapped: MIDI follow CCs and the performance view default layout (no free slots by convention).
 
 ## Possible future work

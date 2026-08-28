@@ -19,9 +19,11 @@
 #include "definitions_cxx.hpp"
 #include "gui/l10n/l10n.h"
 #include "gui/l10n/strings.h"
+#include "hid/display/display.h"
 #include "model/mod_controllable/filters/filter_config.h"
 #include "model/mod_controllable/mod_controllable_audio.h"
 #include "model/song/song.h"
+#include "plugin/host/fx_plugin_bank.h"
 #include "util/container/enum_to_string_map.hpp"
 #include <cstring>
 
@@ -268,14 +270,25 @@ char const* getPatchedParamDisplayName(int32_t p) {
 	}
 }
 
+/// Is `p` (an unpatched ID without UNPATCHED_START) one of the FX-plugin bank slots?
+constexpr bool isFxPluginParam(ParamType p) {
+	return p >= UNPATCHED_FX_PLUGIN_PARAM_FIRST && p < UNPATCHED_FX_PLUGIN_PARAM_FIRST + kNumFxPluginParams;
+}
+
 char const* getParamDisplayName(Kind kind, int32_t p) {
 	using enum l10n::String;
 	if (kind == Kind::PATCHED) {
 		return getPatchedParamDisplayName(p);
 	}
 
-	if ((kind == Kind::UNPATCHED_SOUND || kind == Kind::UNPATCHED_GLOBAL) && p < (UNPATCHED_NUM_SHARED)) {
-		static l10n::String const NAMES[UNPATCHED_NUM_SHARED] = {
+	if ((kind == Kind::UNPATCHED_SOUND || kind == Kind::UNPATCHED_GLOBAL) && isFxPluginParam(p)) {
+		// Named by the plugin that owns the bank slot, not by the l10n tables.
+		auto const& info = deluge::plugin::fxBankParamInfo(p - UNPATCHED_FX_PLUGIN_PARAM_FIRST);
+		return display->haveOLED() ? info.name : info.shortName;
+	}
+
+	if ((kind == Kind::UNPATCHED_SOUND || kind == Kind::UNPATCHED_GLOBAL) && p < UNPATCHED_FX_PLUGIN_PARAM_FIRST) {
+		static l10n::String const NAMES[UNPATCHED_FX_PLUGIN_PARAM_FIRST] = {
 		    [UNPATCHED_STUTTER_RATE] = STRING_FOR_STUTTER_RATE,
 		    [UNPATCHED_BASS] = STRING_FOR_BASS,
 		    [UNPATCHED_TREBLE] = STRING_FOR_TREBLE,
@@ -283,28 +296,35 @@ char const* getParamDisplayName(Kind kind, int32_t p) {
 		    [UNPATCHED_TREBLE_FREQ] = STRING_FOR_TREBLE_FREQUENCY,
 		    [UNPATCHED_SAMPLE_RATE_REDUCTION] = STRING_FOR_DECIMATION,
 		    [UNPATCHED_BITCRUSHING] = STRING_FOR_BITCRUSH,
-		    [UNPATCHED_TAPE_SATURATION] = STRING_FOR_TAPE,
-		    [UNPATCHED_MOD_FX_OFFSET] = STRING_FOR_MODFX_OFFSET,
-		    [UNPATCHED_MOD_FX_FEEDBACK] = STRING_FOR_MODFX_FEEDBACK,
-		    [UNPATCHED_SIDECHAIN_SHAPE] = STRING_FOR_SIDECHAIN_SHAPE,
-		    [UNPATCHED_COMPRESSOR_THRESHOLD] = STRING_FOR_THRESHOLD,
-		    [UNPATCHED_ARP_GATE] = STRING_FOR_ARP_GATE_MENU_TITLE,
-		    [UNPATCHED_ARP_RHYTHM] = STRING_FOR_ARP_RHYTHM_MENU_TITLE,
-		    [UNPATCHED_ARP_SEQUENCE_LENGTH] = STRING_FOR_ARP_SEQUENCE_LENGTH_MENU_TITLE,
-		    [UNPATCHED_ARP_CHORD_POLYPHONY] = STRING_FOR_ARP_CHORD_POLYPHONY_MENU_TITLE,
-		    [UNPATCHED_ARP_RATCHET_AMOUNT] = STRING_FOR_ARP_RATCHETS_MENU_TITLE,
-		    [UNPATCHED_NOTE_PROBABILITY] = STRING_FOR_NOTE_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_REVERSE_PROBABILITY] = STRING_FOR_REVERSE_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_ARP_BASS_PROBABILITY] = STRING_FOR_ARP_BASS_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_ARP_SWAP_PROBABILITY] = STRING_FOR_ARP_SWAP_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_ARP_GLIDE_PROBABILITY] = STRING_FOR_ARP_GLIDE_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_ARP_CHORD_PROBABILITY] = STRING_FOR_ARP_CHORD_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_ARP_RATCHET_PROBABILITY] = STRING_FOR_ARP_RATCHET_PROBABILITY_MENU_TITLE,
-		    [UNPATCHED_ARP_SPREAD_GATE] = STRING_FOR_ARP_SPREAD_GATE_MENU_TITLE,
-		    [UNPATCHED_ARP_SPREAD_OCTAVE] = STRING_FOR_ARP_SPREAD_OCTAVE_MENU_TITLE,
-		    [UNPATCHED_SPREAD_VELOCITY] = STRING_FOR_SPREAD_VELOCITY_MENU_TITLE,
 		};
 		return l10n::get(NAMES[p]);
+	}
+
+	// The shared params after the FX-plugin bank (designated initializers cannot skip the bank's slots).
+	if ((kind == Kind::UNPATCHED_SOUND || kind == Kind::UNPATCHED_GLOBAL) && p < UNPATCHED_NUM_SHARED) {
+		constexpr ParamType afterBank = UNPATCHED_MOD_FX_OFFSET;
+		static l10n::String const NAMES[UNPATCHED_NUM_SHARED - afterBank] = {
+		    [UNPATCHED_MOD_FX_OFFSET - afterBank] = STRING_FOR_MODFX_OFFSET,
+		    [UNPATCHED_MOD_FX_FEEDBACK - afterBank] = STRING_FOR_MODFX_FEEDBACK,
+		    [UNPATCHED_SIDECHAIN_SHAPE - afterBank] = STRING_FOR_SIDECHAIN_SHAPE,
+		    [UNPATCHED_COMPRESSOR_THRESHOLD - afterBank] = STRING_FOR_THRESHOLD,
+		    [UNPATCHED_ARP_GATE - afterBank] = STRING_FOR_ARP_GATE_MENU_TITLE,
+		    [UNPATCHED_ARP_RHYTHM - afterBank] = STRING_FOR_ARP_RHYTHM_MENU_TITLE,
+		    [UNPATCHED_ARP_SEQUENCE_LENGTH - afterBank] = STRING_FOR_ARP_SEQUENCE_LENGTH_MENU_TITLE,
+		    [UNPATCHED_ARP_CHORD_POLYPHONY - afterBank] = STRING_FOR_ARP_CHORD_POLYPHONY_MENU_TITLE,
+		    [UNPATCHED_ARP_RATCHET_AMOUNT - afterBank] = STRING_FOR_ARP_RATCHETS_MENU_TITLE,
+		    [UNPATCHED_NOTE_PROBABILITY - afterBank] = STRING_FOR_NOTE_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_REVERSE_PROBABILITY - afterBank] = STRING_FOR_REVERSE_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_ARP_BASS_PROBABILITY - afterBank] = STRING_FOR_ARP_BASS_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_ARP_SWAP_PROBABILITY - afterBank] = STRING_FOR_ARP_SWAP_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_ARP_GLIDE_PROBABILITY - afterBank] = STRING_FOR_ARP_GLIDE_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_ARP_CHORD_PROBABILITY - afterBank] = STRING_FOR_ARP_CHORD_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_ARP_RATCHET_PROBABILITY - afterBank] = STRING_FOR_ARP_RATCHET_PROBABILITY_MENU_TITLE,
+		    [UNPATCHED_ARP_SPREAD_GATE - afterBank] = STRING_FOR_ARP_SPREAD_GATE_MENU_TITLE,
+		    [UNPATCHED_ARP_SPREAD_OCTAVE - afterBank] = STRING_FOR_ARP_SPREAD_OCTAVE_MENU_TITLE,
+		    [UNPATCHED_SPREAD_VELOCITY - afterBank] = STRING_FOR_SPREAD_VELOCITY_MENU_TITLE,
+		};
+		return l10n::get(NAMES[p - afterBank]);
 	}
 
 	if (kind == Kind::EXPRESSION && p < kNumExpressionDimensions) {
@@ -489,6 +509,9 @@ constexpr char const* paramNameForFileConst(Kind const kind, ParamType const par
 	}
 
 	else if (param >= UNPATCHED_START) {
+		if (isFxPluginParam(param - UNPATCHED_START)) {
+			return deluge::plugin::fxBankParamInfo(param - UNPATCHED_START - UNPATCHED_FX_PLUGIN_PARAM_FIRST).fileName;
+		}
 		switch (static_cast<UnpatchedShared>(param - UNPATCHED_START)) {
 		case UNPATCHED_STUTTER_RATE:
 			return "stutterRate";
@@ -511,8 +534,8 @@ constexpr char const* paramNameForFileConst(Kind const kind, ParamType const par
 		case UNPATCHED_BITCRUSHING:
 			return "bitcrushAmount";
 
-		case UNPATCHED_TAPE_SATURATION:
-			return "tapeSaturation";
+		case UNPATCHED_FX_PLUGIN_PARAM_FIRST: // the whole bank is answered above
+			break;
 
 		case UNPATCHED_MOD_FX_OFFSET:
 			return "modFXOffset";

@@ -60,7 +60,7 @@ public:
 	virtual Error readTagFromFile(Deserializer& reader, char const* tagName, ParamManagerForTimeline* paramManager,
 	                              int32_t readAutomationUpToPos, ArpeggiatorSettings* arpSettings, Song* song);
 	void processSRRAndBitcrushing(std::span<StereoSample> buffer, int32_t* postFXVolume, ParamManager* paramManager);
-	void processTapeSaturation(std::span<StereoSample> buffer, ParamManager* paramManager);
+	void processFxPlugins(std::span<StereoSample> buffer, ParamManager* paramManager);
 	static void writeParamAttributesToFile(Serializer& writer, ParamManager* paramManager, bool writeAutomation,
 	                                       int32_t* valuesForOverride = nullptr);
 	static void writeParamTagsToFile(Serializer& writer, ParamManager* paramManager, bool writeAutomation,
@@ -88,13 +88,12 @@ public:
 	virtual void ensureInaccessibleParamPresetValuesWithoutKnobsAreZero(Song* song) {} // Song may be NULL
 	bool isBitcrushingEnabled(ParamManager* paramManager);
 	bool isSRREnabled(ParamManager* paramManager);
-	bool isTapeSaturationEnabled(ParamManager* paramManager);
 
-	/// Base drive shift for tape saturation, handed to the plugin as its DelugeFxContext::levelShift. The three
-	/// insertion points run ~15dB apart (a lone Sound is much quieter than the summed song master), so each
-	/// context anchors the knob differently - same idea as the stock Saturation's per-context shift bases.
-	/// Default suits the song master; Sound and GlobalEffectableForClip override hotter.
-	virtual uint32_t getTapeSaturationDriveBase() { return 4; }
+	/// How far below q31 full scale this insertion point's signal sits, in bits - handed to every insert-FX plugin
+	/// as DelugeFxContext::levelShift so drive-style knobs anchor to real levels. The three insertion points run
+	/// ~15dB apart (a lone Sound is much quieter than the summed song master), same idea as the stock Saturation's
+	/// per-context shift bases. Default suits the song master; Sound and GlobalEffectableForClip override hotter.
+	virtual uint32_t getFxPluginLevelShift() { return 4; }
 	bool hasBassAdjusted(ParamManager* paramManager);
 	bool hasTrebleAdjusted(ParamManager* paramManager);
 	ModelStackWithAutoParam* getParamFromMIDIKnob(MIDIKnob& knob, ModelStackWithThreeMainThings* modelStack) override;
@@ -130,8 +129,9 @@ public:
 	StereoSample grabbedSample;
 	StereoSample lastGrabbedSample;
 
-	// Tape saturation runs as an insert-FX plugin (plugin/fx/tape_saturation.c); this slot owns its state.
-	deluge::plugin::FxPluginSlot tapeSaturation;
+	// Insert-FX plugins (tape saturation and whatever else is registered in plugin/host/fx_plugin_bank.h), run at
+	// the end of the distortion stage; the chain owns their state.
+	deluge::plugin::FxPluginChain fxPlugins;
 
 	SideChain sidechain; // Song doesn't use this, despite extending this class
 

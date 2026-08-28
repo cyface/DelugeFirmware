@@ -15,21 +15,18 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "plugin/host/builtin_fx.h"
-#include "plugin/fx/tape_saturation.h"
-#include "plugin/host/plugin_host.h"
+#include "gui/menu_item/fx_plugin_param.h"
+#include "hid/display/display.h"
 
-namespace deluge::plugin::builtin {
+namespace deluge::gui::menu_item {
 
-static_assert(sizeof(TapeSaturationState) <= kFxPluginMaxStateBytes);
+std::string_view FxPluginParam::getName() const {
+	auto const& info = deluge::plugin::fxBankParamInfo(bankIndex_);
+	return display->haveOLED() ? info.name : info.shortName;
+}
 
-const DelugeFxPlugin kTapeSaturation = {
-    .abiVersion = DELUGE_PLUGIN_ABI_VERSION,
-    .name = "Tape",
-    .numParams = TAPE_SATURATION_NUM_PARAMS,
-    .stateSize = sizeof(TapeSaturationState),
-    .reset = tape_saturation_reset,
-    .render = tape_saturation_render,
-};
+std::string_view FxPluginParam::getTitle() const {
+	return deluge::plugin::fxBankParamInfo(bankIndex_).name;
+}
 
-} // namespace deluge::plugin::builtin
+} // namespace deluge::gui::menu_item

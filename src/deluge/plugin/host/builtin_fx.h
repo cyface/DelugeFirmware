@@ -16,12 +16,30 @@
  */
 
 #pragma once
+#include "plugin/fx/tape_saturation.h"
 #include "plugin/plugin_abi.h"
 
-/// Insert-FX plugins compiled into the firmware. Each is a plain-C kernel under plugin/fx/ described here
-/// for the host; a plugin loaded from the card at runtime would arrive with an equivalent descriptor.
+/// Insert-FX plugins compiled into the firmware. Each is a plain-C kernel under plugin/fx/ described here for the
+/// host; everything is constexpr because param.cpp derives XML attribute names from it at compile time. A plugin
+/// loaded from the card at runtime would arrive with an equivalent descriptor built from its file header.
 namespace deluge::plugin::builtin {
 
-extern const DelugeFxPlugin kTapeSaturation;
+inline constexpr DelugeFxParamInfo kTapeSaturationParams[TAPE_SATURATION_NUM_PARAMS] = {
+    [TAPE_SATURATION_PARAM_AMOUNT] = {.name = "Tape",
+                                      .shortName = "TAPE",
+                                      .fileName = "tapeSaturation",
+                                      .defaultValue = static_cast<int32_t>(0x80000000)},
+};
+
+inline constexpr DelugeFxPlugin kTapeSaturation = {
+    .abiVersion = DELUGE_PLUGIN_ABI_VERSION,
+    .name = "Tape",
+    .numParams = TAPE_SATURATION_NUM_PARAMS,
+    .paramInfo = kTapeSaturationParams,
+    .stateSize = sizeof(TapeSaturationState),
+    .reset = tape_saturation_reset,
+    .isActive = tape_saturation_is_active,
+    .render = tape_saturation_render,
+};
 
 } // namespace deluge::plugin::builtin
