@@ -38,8 +38,8 @@ std::string_view displayName(const DelugePluginName& name);
 
 // ---- source plugins ------------------------------------------------------------------------------------------
 
-/// The source plugin behind OscType::DRUM.
-inline constexpr const DelugeSourcePlugin& kDrumSourcePlugin = builtin::kPlaitsDrums;
+/// The source plugin behind OscType::DRUM as built into the firmware.
+inline constexpr const DelugeSourcePlugin& kBuiltinDrumSourcePlugin = builtin::kPlaitsDrums;
 
 /// Most scratch a source plugin may ask the host to lend per render call, and the block size the host renders in.
 inline constexpr uint32_t kSourcePluginMaxScratchBytes = 2048;
@@ -51,11 +51,34 @@ constexpr bool sourcePluginFitsTheHost(const DelugeSourcePlugin& plugin) {
 	       && plugin.maxBlockSize >= kSourcePluginBlockSize && plugin.init != nullptr && plugin.trigger != nullptr
 	       && plugin.render != nullptr;
 }
-static_assert(sourcePluginFitsTheHost(kDrumSourcePlugin));
+static_assert(sourcePluginFitsTheHost(kBuiltinDrumSourcePlugin));
+
+/// The drum source plugin actually in use: the built-in one, unless a blob from PLUGINS/ replaced it at boot (see
+/// plugin/host/plugin_loader.h). Menus, XML and voice allocation all read it through here, so a loaded plugin
+/// brings its own models and macro names with it.
+const DelugeSourcePlugin& drumSourcePlugin();
+
+/// The insert FX holding bank slot `index`: kBuiltinFxPlugins[index], or the blob that replaced it at boot. Only
+/// the DSP side moves - a loaded FX keeps the built-in's param slots, names and XML attributes (see the
+/// param-bank policy in plugin/README.md).
+const DelugeFxPlugin& activeFxPlugin(uint32_t index);
+
+/// Swap a descriptor bound from a blob in for the built-in. Boot only: the descriptors are fixed once the first
+/// voice or FX chain has read them.
+void installLoadedSourcePlugin(const DelugeSourcePlugin& plugin);
+void installLoadedFxPlugin(uint32_t index, const DelugeFxPlugin& plugin);
+
+/// Run one fixed, deterministic block through a plugin and fold the result into a checksum (0 = could not run it).
+/// Two descriptors holding the same kernel give the same number, whether that kernel is linked into the firmware
+/// or executing from a blob in SDRAM - which is how the loader checks a card's plugin against the built-in it
+/// replaced, on the device, with no audio path involved. Uses the stack; safe before the audio engine starts.
+uint32_t selfCheck(const DelugeFxPlugin& plugin);
+uint32_t selfCheck(const DelugeSourcePlugin& plugin);
 
 /// Lookups the rest of the firmware derives model names and XML strings from.
 inline const DelugeSourceModelInfo& drumModelInfo(uint32_t model) {
-	return kDrumSourcePlugin.modelInfo[model < kDrumSourcePlugin.numModels ? model : 0];
+	const DelugeSourcePlugin& plugin = drumSourcePlugin();
+	return plugin.modelInfo[model < plugin.numModels ? model : 0];
 }
 /// The model whose XML value is `fileName`, or 0 (the first model) if none matches.
 uint32_t drumModelForFileName(std::string_view fileName);

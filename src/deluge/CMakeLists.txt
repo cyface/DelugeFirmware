@@ -16,6 +16,10 @@ add_dependencies(deluge deluge_strings deluge_version)
 # Filter out DSP sources as those are built as part of the deluge_dsp library
 list(FILTER deluge_SOURCES EXCLUDE REGEX .*/dsp/.*)
 
+# Filter out the offline plugin tools: those are development-machine programs (each has its own main())
+# that build and check .dlp blobs, not firmware. See plugin/tools/pack_dlp.py.
+list(FILTER deluge_SOURCES EXCLUDE REGEX .*/plugin/tools/.*)
+
 # Ensure the menu sources are built prior to building the main target
 add_dependencies(deluge deluge_menus)
 

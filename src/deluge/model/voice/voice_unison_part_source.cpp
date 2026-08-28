@@ -78,7 +78,7 @@ bool VoiceUnisonPartSource::noteOn(Voice* voice, Source* source, VoiceSamplePlay
 	}
 	else if (synthMode != SynthMode::FM && source->oscType == OscType::DRUM) [[unlikely]] {
 		if (drumVoice == nullptr) {
-			drumVoice = deluge::plugin::SourcePluginVoice::solicit(deluge::plugin::kDrumSourcePlugin);
+			drumVoice = deluge::plugin::SourcePluginVoice::solicit(deluge::plugin::drumSourcePlugin());
 			if (drumVoice == nullptr) {
 				return false;
 			}

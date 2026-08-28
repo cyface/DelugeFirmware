@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Prove a plugin kernel honours the tier-1 contract by building it the way the tier-2 loader would need it:
+# Prove a plugin kernel honours the tier-1 contract by building it the way the tier-2 loader needs it:
 # freestanding, position-independent, no libc - and asserting the result has no .data, no .bss, no GOT, no
 # undefined symbols and no relocation that needs a load address (PC-relative calls between the kernel's own
 # functions and PC-relative references to its own .rodata are fine: a link fixes them to constant offsets, and the
-# blob is .text + .rodata copied as one image). Same target flags as the firmware and as the #37 spike blob.
+# blob is .text + .rodata copied as one image). Same target flags as the firmware and as the #37 spike blob: they
+# come from pack_dlp.py, so the object here and the blob on the card are built identically.
+#
+# Then the tier-2 half: every built-in plugin is packed into a .dlp and read back through the host's own parser,
+# and a corrupted copy of each is checked to be rejected for the right reason (pack_dlp.py --self-test).
 #
 #   src/deluge/plugin/check_freestanding.sh [kernel.c ...]     (default: every plugin/fx/*.c and plugin/source/*.c)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(git -C "$HERE" rev-parse --show-toplevel)"
 BIN="$ROOT/toolchain/current/arm-none-eabi-gcc/bin"
-FLAGS=(-mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard -mthumb -O2 -fPIC -mpic-data-is-text-relative
-       -ffreestanding -nostdlib -fno-builtin -fno-exceptions -fno-asynchronous-unwind-tables
-       -fno-math-errno -ffunction-sections -fdata-sections -fvisibility=hidden -Wall -Werror -std=gnu23
-       -I "$ROOT/src/deluge")
+read -ra FLAGS <<<"$(python3 "$HERE/tools/pack_dlp.py" --print-flags)"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 
@@ -42,4 +43,12 @@ for src in "${kernels[@]}"; do
 		status=1
 	fi
 done
+
+# The blob the loader will actually meet: pack every built-in, read it back through plugin_blob.h, and check that
+# a damaged one is refused. Skipped (with a note) if the kernels above already failed.
+if [ $status -eq 0 ]; then
+	python3 "$HERE/tools/pack_dlp.py" --all --self-test --out "$OUT/plugins" || status=1
+else
+	echo "     (skipping the .dlp round trip: fix the kernel above first)"
+fi
 exit $status
