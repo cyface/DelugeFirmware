@@ -39,6 +39,7 @@ typedef struct {
 } TapeSaturationState;
 
 void tape_saturation_reset(void* state);
+int32_t tape_saturation_is_active(const int32_t* params);
 void tape_saturation_render(const DelugePluginHostApi* api, void* state, const int32_t* params,
                             const DelugeFxContext* context, DelugePluginStereoSample* buffer, uint32_t numSamples);
 

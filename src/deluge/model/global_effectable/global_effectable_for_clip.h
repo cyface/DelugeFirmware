@@ -46,7 +46,7 @@ public:
 	int32_t getShiftAmountForSaturation() { return (clippingAmount >= 3) ? (clippingAmount - 3) : 0; }
 
 	/// Kit / audio-clip summing runs a bit hotter than a lone Sound but well below the song master (measured).
-	uint32_t getTapeSaturationDriveBase() override { return 8; }
+	uint32_t getFxPluginLevelShift() override { return 8; }
 
 	/// clipping amount must be greater than 0! Check before calling
 	/// Shift amount is givben by getShiftAmountForSaturation

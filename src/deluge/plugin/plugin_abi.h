@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 /* Bump when any struct or function signature below changes shape. */
-#define DELUGE_PLUGIN_ABI_VERSION 1u
+#define DELUGE_PLUGIN_ABI_VERSION 2u
 
 /* One stereo frame. Same layout as the firmware's StereoSample (asserted host-side), so a plugin
  * renders in place on the firmware's own buffer. */
@@ -63,8 +63,21 @@ typedef struct {
 	uint32_t levelShift;
 } DelugeFxContext;
 
+/* One parameter a plugin exposes. The host owns the storage (a slot in its shared unpatched param bank) and
+ * generates the menu entry, automation entry, XML attribute and display names from this. */
+typedef struct {
+	const char* name;      /* display name, OLED (<= 14 chars) */
+	const char* shortName; /* display name, 7-segment (<= 4 chars) */
+	const char* fileName;  /* XML attribute; must be unique across every param the firmware knows */
+	int32_t defaultValue;  /* raw q31, what a fresh preset gets */
+} DelugeFxParamInfo;
+
 /* Reset all state to "just switched on". `state` is the host-owned block for this instance. */
 typedef void (*DelugeFxResetFn)(void* state);
+
+/* Optional: is the FX doing anything at these param values? While it returns 0 the host bypasses it, so a plugin
+ * that is "off" at its defaults costs nothing. NULL means always active. */
+typedef int32_t (*DelugeFxIsActiveFn)(const int32_t* params);
 
 /* Render `numSamples` stereo frames in place. `params` holds `numParams` raw q31 unpatched values as
  * stored by the firmware (INT32_MIN..INT32_MAX); the host decides whether the FX is enabled at all and
@@ -75,11 +88,13 @@ typedef void (*DelugeFxRenderFn)(const DelugePluginHostApi* api, void* state, co
 /* What the host needs to know about an insert-FX plugin. Built-in plugins get one of these in the
  * firmware's registry (plugin/host/builtin_fx.cpp); a loaded blob will describe itself the same way. */
 typedef struct {
-	uint32_t abiVersion; /* DELUGE_PLUGIN_ABI_VERSION the plugin was built against */
-	const char* name;    /* short display name */
-	uint32_t numParams;  /* entries the plugin reads from `params` */
-	uint32_t stateSize;  /* bytes of state the host allocates per instance (4-byte aligned) */
+	uint32_t abiVersion;                /* DELUGE_PLUGIN_ABI_VERSION the plugin was built against */
+	const char* name;                   /* short display name */
+	uint32_t numParams;                 /* entries in `paramInfo`, and what `params` holds at render time */
+	const DelugeFxParamInfo* paramInfo; /* one per param, in `params` order */
+	uint32_t stateSize;                 /* bytes of state the host allocates per instance (4-byte aligned) */
 	DelugeFxResetFn reset;
+	DelugeFxIsActiveFn isActive; /* may be NULL */
 	DelugeFxRenderFn render;
 } DelugeFxPlugin;
 

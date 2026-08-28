@@ -38,8 +38,7 @@
 #include "model/song/song.h"
 #include "modulation/knob.h"
 #include "modulation/params/param_set.h"
-#include "plugin/fx/tape_saturation.h"
-#include "plugin/host/builtin_fx.h"
+#include "plugin/host/fx_plugin_bank.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/sound/sound.h"
 #include "storage/storage_manager.h"
@@ -49,7 +48,7 @@ namespace params = deluge::modulation::params;
 
 extern int32_t spareRenderingBuffer[][SSI_TX_BUFFER_NUM_SAMPLES];
 
-ModControllableAudio::ModControllableAudio() : tapeSaturation(deluge::plugin::builtin::kTapeSaturation) {
+ModControllableAudio::ModControllableAudio() {
 
 	// Grain
 
@@ -137,7 +136,10 @@ void ModControllableAudio::initParams(ParamManager* paramManager) {
 
 	unpatchedParams->params[params::UNPATCHED_BITCRUSHING].setCurrentValueBasicForSetup(-2147483648);
 
-	unpatchedParams->params[params::UNPATCHED_TAPE_SATURATION].setCurrentValueBasicForSetup(-2147483648);
+	for (uint32_t i = 0; i < params::kNumFxPluginParams; i++) {
+		unpatchedParams->params[deluge::plugin::fxBankParamId(i)].setCurrentValueBasicForSetup(
+		    deluge::plugin::fxBankParamInfo(i).defaultValue);
+	}
 
 	unpatchedParams->params[params::UNPATCHED_SIDECHAIN_SHAPE].setCurrentValueBasicForSetup(-601295438);
 	unpatchedParams->params[params::UNPATCHED_COMPRESSOR_THRESHOLD].setCurrentValueBasicForSetup(0);
@@ -373,22 +375,14 @@ void ModControllableAudio::processSRRAndBitcrushing(std::span<StereoSample> buff
 		sampleRateReductionOnLastTime = false;
 	}
 
-	// Tape saturation goes after SRR / bitcrushing so it rounds off their edges too
-	processTapeSaturation(buffer, paramManager);
+	// Insert-FX plugins go after SRR / bitcrushing so e.g. tape saturation rounds off their edges too
+	processFxPlugins(buffer, paramManager);
 }
 
-bool ModControllableAudio::isTapeSaturationEnabled(ParamManager* paramManager) {
-	UnpatchedParamSet* unpatchedParams = paramManager->getUnpatchedParamSet();
-	return (unpatchedParams->getValue(params::UNPATCHED_TAPE_SATURATION) != -2147483648);
-}
-
-// The DSP itself is the tape saturation plugin kernel (plugin/fx/tape_saturation.c); this just gathers what the
-// host owes it: the knob, whether it is on, and how hot this insertion point runs.
-void ModControllableAudio::processTapeSaturation(std::span<StereoSample> buffer, ParamManager* paramManager) {
-	int32_t pluginParams[TAPE_SATURATION_NUM_PARAMS];
-	pluginParams[TAPE_SATURATION_PARAM_AMOUNT] =
-	    paramManager->getUnpatchedParamSet()->getValue(params::UNPATCHED_TAPE_SATURATION);
-	tapeSaturation.process(buffer, pluginParams, isTapeSaturationEnabled(paramManager), getTapeSaturationDriveBase());
+// The DSP lives in the plugin kernels (plugin/fx/); this is only the host glue: the chain reads each plugin's
+// params from the bank and needs to know how hot this insertion point runs.
+void ModControllableAudio::processFxPlugins(std::span<StereoSample> buffer, ParamManager* paramManager) {
+	fxPlugins.process(buffer, *paramManager->getUnpatchedParamSet(), getFxPluginLevelShift());
 }
 
 inline void ModControllableAudio::doEQ(bool doBass, bool doTreble, int32_t* inputL, int32_t* inputR, int32_t bassAmount,
@@ -522,8 +516,11 @@ void ModControllableAudio::writeParamAttributesToFile(Serializer& writer, ParamM
 	unpatchedParams->writeParamAsAttribute(writer, "modFXFeedback", params::UNPATCHED_MOD_FX_FEEDBACK, writeAutomation,
 	                                       false, valuesForOverride);
 	// Community Firmware parameters (always write them after the official ones, just before closing the parent tag)
-	unpatchedParams->writeParamAsAttribute(writer, "tapeSaturation", params::UNPATCHED_TAPE_SATURATION, writeAutomation,
-	                                       false, valuesForOverride);
+	for (uint32_t i = 0; i < params::kNumFxPluginParams; i++) {
+		unpatchedParams->writeParamAsAttribute(writer, deluge::plugin::fxBankParamInfo(i).fileName,
+		                                       deluge::plugin::fxBankParamId(i), writeAutomation, false,
+		                                       valuesForOverride);
+	}
 	unpatchedParams->writeParamAsAttribute(writer, "compressorThreshold", params::UNPATCHED_COMPRESSOR_THRESHOLD,
 	                                       writeAutomation, false, valuesForOverride);
 
@@ -622,10 +619,10 @@ bool ModControllableAudio::readParamTagFromFile(Deserializer& reader, char const
 		reader.exitTag("bitCrush");
 	}
 
-	else if (!strcmp(tagName, "tapeSaturation")) {
-		unpatchedParams->readParam(reader, unpatchedParamsSummary, params::UNPATCHED_TAPE_SATURATION,
+	else if (int32_t bankIndex = deluge::plugin::fxBankIndexForFileName(tagName); bankIndex >= 0) {
+		unpatchedParams->readParam(reader, unpatchedParamsSummary, deluge::plugin::fxBankParamId(bankIndex),
 		                           readAutomationUpToPos);
-		reader.exitTag("tapeSaturation");
+		reader.exitTag(deluge::plugin::fxBankParamInfo(bankIndex).fileName);
 	}
 
 	else if (!strcmp(tagName, "modFXOffset")) {

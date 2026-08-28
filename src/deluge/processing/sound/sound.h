@@ -286,7 +286,7 @@ public:
 	int32_t getShiftAmountForSaturation() const { return (clippingAmount >= 2) ? (clippingAmount - 2) : 0; }
 
 	/// A lone Sound runs ~15dB below the song master at the FX insertion point (measured), so drive much harder.
-	uint32_t getTapeSaturationDriveBase() override { return 9; }
+	uint32_t getFxPluginLevelShift() override { return 9; }
 
 	///	clipping amount must be greater than 0! Check before calling
 	/// Shift amount is givben by getShiftAmountForSaturation
