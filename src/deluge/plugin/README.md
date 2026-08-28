@@ -19,7 +19,9 @@ plugin/host/builtin_fx.h       constexpr descriptors (incl. param tables) for th
 plugin/host/builtin_sources.h  constexpr descriptor (incl. model + macro-name tables) for the source kernel compiled in
 plugin/host/fx_plugin_bank.h   the FX registry: assigns each plugin its slots in the shared param bank, and the
                                constexpr lookups everything else derives names/defaults from
-plugin/host/plugin_host.*      the firmware's API table, FxPluginSlot / FxPluginChain, SourcePluginVoice
+plugin/host/plugin_host.*      the firmware's API table, FxPluginSlot / FxPluginChain, SourcePluginVoice, and
+                               which descriptor is active (built-in, or one loaded from the card)
+plugin/host/plugin_loader.*    the boot-time PLUGINS/ scan: read, validate, place in SDRAM, swap in for a built-in
 plugin/check_freestanding.sh   builds each kernel as a blob would be and fails on any contract breach
 plugin/tools/pack_dlp.py       builds a kernel into a .dlp and verifies the file reads back as the descriptor it came from
 plugin/tools/dump_builtin_*    the built-in descriptors as JSON, so the packer has no second copy of the names
@@ -68,7 +70,11 @@ minimum); the host bypasses it then and it costs nothing.
   division and `__builtin_sqrtf` are single VFP instructions and fine (the firmware and the check
   script both build with `-fno-math-errno`-equivalent flags so sqrt is never a call).
 - **Float is allowed, but the toolchain flags are part of the ABI.** Both sides are
-  `-mfloat-abi=hard -mfpu=neon`; samples, params and pitch still cross the boundary as integers.
+  `-mfloat-abi=hard -mfpu=neon -funsafe-math-optimizations -ffast-math`; samples, params and pitch still cross the
+  boundary as integers. The float flags are not taste: `-funsafe-math-optimizations` is what lets GCC use NEON
+  instead of VFP for single precision, and NEON is not IEEE (it flushes denormals), so the same kernel source
+  built without them computes slightly different numbers. That is measurable - the drums blob's boot self-check
+  disagreed with the built-in until `pack_dlp.py` used the firmware's float flags.
 - **No pointer tables in the kernel.** A `static const` array of function pointers or strings is a
   table of absolute addresses; descriptors with names and entry points live host-side (or, for a
   blob, get built by the loader from offsets in the file header). Small constant lookup tables of
@@ -121,6 +127,38 @@ with `plugin.ld`, refuses any import or leftover relocation, and then reads the 
 name offset past the end, an out-of-range and a non-Thumb entry point) and requires the parser to reject each
 for the right reason. `check_freestanding.sh` runs all of that after its per-kernel checks.
 
+## Loading one (tier 2)
+
+Drop a `.dlp` in `PLUGINS/` on the card. At boot - after the settings files are read, before the first song -
+`loadPluginsFromCard()` reads each one into SDRAM, validates it, and, if it names a plugin this firmware has
+built in, **replaces that built-in for the rest of the boot**: the file's descriptor becomes the one menus, XML
+and the audio engine read, and its code runs from SDRAM. The image is made fetchable as code with the #37
+spike's rule (clean D + L2 by range, invalidate I and the branch predictor); the file stays resident because the
+descriptor's names point into it.
+
+A blob that is damaged, built against another ABI version, or names a plugin this firmware does not have is
+skipped and the built-in stays: what is on the card can never take a plugin away. Every outcome is recorded in a
+fixed-size `PluginLoadRecord` (file, plugin name, status, how far it got, where the code landed) that survives
+for the run, so a load can be inspected with a debugger - or the emulator's `xp` - when there is no UI for it
+yet. The per-file `stage` is written *before* each step, so if a plugin faults the last record says which file
+and which step.
+
+Each loaded plugin is also **self-checked at boot**: one fixed block is rendered through it and through the
+built-in it replaced, and both checksums go in the record. Equal means the blob is bit-identical to the built-in
+over that block - the cheapest honest answer to "is the code on the card really the code I built?", and the
+first call into the blob happens at boot rather than mid-song.
+
+Replacing a built-in is all the loader does. A plugin with no built-in behind it - a new FX, a new oscillator
+type - needs the registry to become dynamic, which is step 4 of the issue.
+
+Verified in DelugEmu (2026-08-28, both reference kernels in `PLUGINS/`): both load and install, code at
+`0x0fe08ca0` / `0x0fe0b340` in SDRAM, self-checks identical to the built-ins (`0x1dec0767`, `0xc6da39af`), the
+menus' model strings read out of the blob (patching "Hi-hat 2" to "LOADED!!" in the file and restamping the CRC
+changed what the firmware reported), and a blob with `abiVersion` bumped to 4 was refused with the built-in kept.
+Loading also flushed out a long-standing firmware bug: `l1_cache_operation.s` declared a custom section the
+linker script does not map, so `L1_I_CacheFlushAll()` sat at VMA 0 and hard-faulted when called (the fix is
+cherry-picked here from the #37 spike branch).
+
 **Param-bank policy for loaded FX: fixed at boot.** A loaded FX gets its slots in `params::kNumFxPluginParams`
 the same way a built-in does - in registry order, decided once during the boot scan - rather than being assigned
 dynamically as songs load. It keeps XML round-tripping by attribute name (as today), keeps `fxBankSlot()` a
@@ -145,10 +183,10 @@ The drums were ported with the loader in mind, so the remaining gap is known:
   the host keeps hits varied and the blob relocation-free.
 - **Scratch is a host loan.** Kernels that need more working memory than a voice should hold ask for
   it per call (`scratchSize`) instead of keeping `static` buffers.
-- Still open (fork issue #41): the loader itself (`PLUGINS/` scan, reading the file, SDRAM placement with the L2
-  clean+invalidate rules from the #37 spike, swapping the loaded descriptor in for the built-in of the same
-  name), fault attribution, a safe boot that skips `PLUGINS/`, and letting a loaded plugin register a new
-  `OscType`/menu entry rather than only replacing the built-in drum plugin.
+- Still open (fork issue #41): telling the *user* what happened (the load report exists, nothing shows it yet), a
+  safe boot that skips `PLUGINS/` so a bad blob cannot spoil the boot loop, naming the plugin on the error screen
+  when a fault happens inside one, and letting a loaded plugin register a new `OscType`/menu entry rather than
+  only replacing a built-in.
 
 ## Adding an insert FX
 

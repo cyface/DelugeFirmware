@@ -35,7 +35,7 @@ public:
 
 	deluge::vector<std::string_view> getOptions(OptType optType) override {
 		(void)optType;
-		const DelugeSourcePlugin& plugin = deluge::plugin::kDrumSourcePlugin;
+		const DelugeSourcePlugin& plugin = deluge::plugin::drumSourcePlugin();
 		deluge::vector<std::string_view> options;
 		options.reserve(plugin.numModels);
 		for (uint32_t i = 0; i < plugin.numModels; i++) {

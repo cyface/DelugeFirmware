@@ -60,6 +60,7 @@
 #include "modulation/params/param_manager.h"
 #include "playback/mode/arrangement.h"
 #include "playback/mode/session.h"
+#include "plugin/host/plugin_loader.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/engines/cv_engine.h"
 #include "scheduler_api.h"
@@ -834,6 +835,9 @@ extern "C" int32_t deluge_main(void) {
 	MIDIDeviceManager::readDevicesFromFile();
 	midiFollow.readDefaultsFromFile();
 	PadLEDs::setBrightnessLevel(FlashStorage::defaultPadBrightness);
+	// Before any song, voice or menu asks for a plugin descriptor: whatever PLUGINS/ holds replaces the built-in
+	// of the same name for the rest of this boot.
+	deluge::plugin::loadPluginsFromCard();
 	setupBlankSong(); // we always need to do this
 	addConditionalTask(setupStartupSong, 100, isCardReady, "load startup song", RESOURCE_SD | RESOURCE_SD_ROUTINE);
 

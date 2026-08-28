@@ -68,7 +68,12 @@ TARGET_FLAGS = [
     "-fno-builtin",
     "-fno-exceptions",
     "-fno-asynchronous-unwind-tables",
-    "-fno-math-errno",
+    # The firmware's float flags, and they are part of the ABI, not a taste: -funsafe-math-optimizations is what
+    # lets GCC use NEON rather than VFP for single-precision, and NEON is not IEEE (it flushes denormals). A float
+    # kernel built without them computes *slightly* different numbers from the same source - measured as a
+    # self-check mismatch against the built-in drums before these were added here.
+    "-funsafe-math-optimizations",
+    "-ffast-math",
     "-ffunction-sections",
     "-fdata-sections",
     "-fvisibility=hidden",

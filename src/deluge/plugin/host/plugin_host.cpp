@@ -83,9 +83,33 @@ std::string_view displayName(const DelugePluginName& name) {
 
 // ---- source plugins ------------------------------------------------------------------------------------------
 
+namespace {
+// Which descriptor each consumer sees. They start as the built-ins and are only ever moved by the boot-time scan
+// of PLUGINS/ (plugin_loader.cpp), before any voice or FX chain has read them.
+const DelugeSourcePlugin* activeDrumPlugin = &kBuiltinDrumSourcePlugin;
+std::array<const DelugeFxPlugin*, kNumBuiltinFxPlugins> activeFxPlugins = kBuiltinFxPlugins;
+} // namespace
+
+const DelugeSourcePlugin& drumSourcePlugin() {
+	return *activeDrumPlugin;
+}
+
+const DelugeFxPlugin& activeFxPlugin(uint32_t index) {
+	return *activeFxPlugins[index];
+}
+
+void installLoadedSourcePlugin(const DelugeSourcePlugin& plugin) {
+	activeDrumPlugin = &plugin;
+}
+
+void installLoadedFxPlugin(uint32_t index, const DelugeFxPlugin& plugin) {
+	activeFxPlugins[index] = &plugin;
+}
+
 uint32_t drumModelForFileName(std::string_view fileName) {
-	for (uint32_t i = 0; i < kDrumSourcePlugin.numModels; i++) {
-		if (fileName == kDrumSourcePlugin.modelInfo[i].fileName) {
+	const DelugeSourcePlugin& plugin = drumSourcePlugin();
+	for (uint32_t i = 0; i < plugin.numModels; i++) {
+		if (fileName == plugin.modelInfo[i].fileName) {
 			return i;
 		}
 	}
@@ -133,7 +157,7 @@ bool SourcePluginVoice::render(const int32_t* macros, uint32_t phaseIncrement, i
 namespace {
 template <size_t... I>
 std::array<FxPluginSlot, sizeof...(I)> makeSlots(std::index_sequence<I...>) {
-	return {FxPluginSlot(*kBuiltinFxPlugins[I])...};
+	return {FxPluginSlot(activeFxPlugin(I))...};
 }
 } // namespace
 
@@ -152,6 +176,69 @@ void FxPluginChain::process(std::span<StereoSample> buffer, UnpatchedParamSet& u
 		bool enabled = (plugin.isActive == nullptr) || (plugin.isActive(params) != 0);
 		slots_[i].process(buffer, params, enabled, levelShift);
 	}
+}
+
+// ---- self-check ----------------------------------------------------------------------------------------------
+
+namespace {
+// One block is enough to tell two kernels apart: every model here runs its excitation, its filters and its
+// overdrive within the first few dozen samples.
+constexpr uint32_t kSelfCheckFrames = 64;
+constexpr uint32_t kSelfCheckStateBytes = 1024;
+
+uint32_t fold(uint32_t checksum, int32_t value) {
+	return (checksum * 31u) ^ static_cast<uint32_t>(value);
+}
+
+// A deterministic test signal: the same numbers on every boot and every device, so the checksums compare.
+int32_t nextTestSample(uint32_t& seed) {
+	seed = seed * 1664525u + 1013904223u;
+	return static_cast<int32_t>(seed) >> 2;
+}
+} // namespace
+
+uint32_t selfCheck(const DelugeFxPlugin& plugin) {
+	if (plugin.reset == nullptr || plugin.render == nullptr || plugin.stateSize > kSelfCheckStateBytes
+	    || plugin.numParams > kMaxParamsPerFxPlugin) {
+		return 0;
+	}
+	alignas(8) uint8_t state[kSelfCheckStateBytes];
+	DelugePluginStereoSample buffer[kSelfCheckFrames];
+	uint32_t seed = 0x01234567u;
+	for (uint32_t i = 0; i < kSelfCheckFrames; i++) {
+		buffer[i].l = nextTestSample(seed);
+		buffer[i].r = nextTestSample(seed);
+	}
+	int32_t params[kMaxParamsPerFxPlugin] = {};
+	for (uint32_t i = 0; i < plugin.numParams; i++) {
+		params[i] = 0x20000000; // well above any "off at the minimum", so the kernel actually does its work
+	}
+	plugin.reset(state);
+	DelugeFxContext context = {.levelShift = 8};
+	plugin.render(&kHostApi, state, params, &context, buffer, kSelfCheckFrames);
+	uint32_t checksum = 0;
+	for (uint32_t i = 0; i < kSelfCheckFrames; i++) {
+		checksum = fold(fold(checksum, buffer[i].l), buffer[i].r);
+	}
+	return checksum != 0 ? checksum : 1u; // 0 is reserved for "did not run"
+}
+
+uint32_t selfCheck(const DelugeSourcePlugin& plugin) {
+	if (!sourcePluginFitsTheHost(plugin) || plugin.voiceStateSize > kSelfCheckStateBytes) {
+		return 0;
+	}
+	ensureSineLut();
+	alignas(8) uint8_t state[kSelfCheckStateBytes];
+	int32_t out[kSelfCheckFrames];
+	int32_t macros[DELUGE_SOURCE_PLUGIN_MAX_MACROS] = {0x40000000, 0x40000000, 0x40000000};
+	plugin.init(state, 0, 0x9E3779B9u); // model 0, a fixed noise seed: the run has to repeat exactly
+	plugin.trigger(state, 0x60000000);
+	plugin.render(&kHostApi, state, macros, 0x00100000u, out, kSelfCheckFrames, sourcePluginScratch);
+	uint32_t checksum = 0;
+	for (uint32_t i = 0; i < kSelfCheckFrames; i++) {
+		checksum = fold(checksum, out[i]);
+	}
+	return checksum != 0 ? checksum : 1u;
 }
 
 void FxPluginSlot::process(std::span<StereoSample> buffer, const int32_t* params, bool enabled, uint32_t levelShift) {
