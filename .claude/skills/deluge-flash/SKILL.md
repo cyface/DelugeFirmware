@@ -81,6 +81,7 @@ identity only carries major.minor.patch, so the *commit* comes from the bin, not
 | `BAD KEY` popup | key mismatch caught at the load message | as E997 |
 | `CHECKSUM FAIL` popup | dropped/garbled packets | retry with `-d 5` |
 | new image boots but the OLED is shifted ~20 % sideways | the **loaded** image predates `chainload-oled-idle` (2026-08-27): after a chainload the PIC is still at full pad-UART speed, so that image's boot-time OLED init reached the panel as pixel data | load a build that has the fix (it re-inits the panel once the scheduler is up); a power-cycle clears it meanwhile |
+| boots and pongs, but pads/buttons/screen are dead (or it drops off USB) | the **sending** image predates `eb8c5d57` (2026-08-28): it jumped while an OLED/PIC DMA was mid-transfer and the new image reconfigured the channel | power-cycle; senders with the fix wait for the DMA channels first |
 | no pong after the load | image didn't boot | power-cycle: reverts to the SD firmware, nothing is lost; check the build |
 | send completes, USB never re-enumerates, screen stuck on screensaver, no pong | the **running** firmware predates the chainload L2 fix (`chainload-l2-cold`, 2026-08-27): stale L2 lines crash any image that isn't byte-identical to the running one | power-cycle, then SD-install a build that has the fix once; after that any image loads |
 
