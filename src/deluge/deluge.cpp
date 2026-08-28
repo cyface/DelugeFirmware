@@ -521,6 +521,17 @@ void setupOLED() {
 	PIC::flush();
 }
 
+// A firmware chainload (dbt loadfw) leaves the PIC at full pad UART speed, so everything the new image
+// says before PIC::setupForPads() - including the D/C-low, enable and select messages around the
+// setupOLED() call at boot - is line noise to it, and the panel's init sequence goes in as pixel data:
+// the display comes up shifted sideways until a power-cycle. Once the scheduler is running and the OLED
+// bus is idle, initialise the panel again. On a power-on boot this repeats a ~50-byte command sequence,
+// invisibly. Registered as a run-once conditional task at the end of deluge_main().
+void reinitOLEDAfterChainload() {
+	setupOLED();
+	deluge::hid::display::OLED::markChanged();
+}
+
 extern "C" void usb_pstd_pcd_task(void);
 extern "C" void usb_cstd_usb_task(void);
 
@@ -910,6 +921,7 @@ extern "C" int32_t deluge_main(void) {
 	// Settings have been read and the UI is up: start the idle countdown.
 	if (hid::display::have_oled_screen) {
 		deluge::hid::display::Screensaver::settingsChanged();
+		addConditionalTask(reinitOLEDAfterChainload, 100, oledBusIsIdle, "oled reinit", RESOURCE_NONE);
 	}
 
 #ifdef USE_TASK_MANAGER

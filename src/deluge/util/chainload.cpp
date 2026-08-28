@@ -27,6 +27,14 @@ extern uint32_t spareRenderingBuffer[][SSI_TX_BUFFER_NUM_SAMPLES];
 #if defined(__arm__)
 extern "C" void v7_dma_flush_range(uint32_t start, uint32_t end);
 #endif
+extern "C" {
+#include "drivers/dmac/dmac.h"
+#include "util/cfunctions.h"
+}
+
+static bool dmaChannelActive(int32_t channel) {
+	return (DMACn(channel).CHSTAT_n & DMAC0_CHSTAT_n_EN) != 0;
+}
 
 void chainload_from_buf(uint8_t* buffer, int buf_size) {
 	uint32_t user_code_start = *(uint32_t*)(buffer + OFF_USER_CODE_START);
@@ -39,15 +47,25 @@ void chainload_from_buf(uint8_t* buffer, int buf_size) {
 		return;
 	}
 
+	// Stop the timers so nothing queues another OLED frame or PIC message, then let any DMA still
+	// running on the OLED SPI and PIC UART channels finish. Disabling interrupts does not stop a DMA,
+	// and the new image re-initialises those channels early in its boot; doing that to a channel that
+	// is mid-transfer leaves the PIC link or the display wedged (seen as "booted, answers sysex, but
+	// pads and screen are dead"). The pad progress bar and the screensaver keep both channels busy
+	// right up to the load message, so this window is real. TIMER_SYSTEM_SLOW stays on for delayMS().
+	disableTimer(TIMER_MIDI_GATE_OUTPUT);
+	disableTimer(TIMER_SYSTEM_FAST);
+	disableTimer(TIMER_SYSTEM_SUPERFAST);
+	for (int32_t i = 0; i < 50 && (dmaChannelActive(OLED_SPI_DMA_CHANNEL) || dmaChannelActive(PIC_TX_DMA_CHANNEL));
+	     i++) {
+		delayMS(1);
+	}
+	disableTimer(TIMER_SYSTEM_SLOW);
+
 	// Disable interrupts so we don't get interrupted during the chainload
 #if defined(__arm__)
 	ENTER_CRITICAL_SECTION();
 #endif
-	// Disable timers
-	disableTimer(TIMER_MIDI_GATE_OUTPUT);
-	disableTimer(TIMER_SYSTEM_SLOW);
-	disableTimer(TIMER_SYSTEM_FAST);
-	disableTimer(TIMER_SYSTEM_SUPERFAST);
 	uint8_t* funcbuf = reinterpret_cast<uint8_t*>(spareRenderingBuffer);
 
 #if defined(__arm__)
@@ -66,15 +84,14 @@ void chainload_from_buf(uint8_t* buffer, int buf_size) {
 	L2CacheCleanInvalidateAll();
 	L2CacheDisable();
 
-	// Jump to the chainloader
-	asm volatile("mov r0,%0\n\t"
-	             "mov r1,%1\n\t"
-	             "mov r2,%2\n\t"
-	             "mov r3,%3\n\t"
-	             "mov r4,%4\n\t"
-	             "blx deluge_chainload"
-	             :
-	             : "r"(user_code_start), "r"(code_size), "r"(user_code_exec), "r"(buffer), "r"(funcbuf)
-	             : "r0", "r1", "r2", "r3", "r4");
+	// Jump to the chainloader. Bind the arguments to r0-r4 directly: the previous "five inputs plus
+	// r0-r4 clobbered" form needed ten free registers and fails under LTO ("asm operand has impossible
+	// constraints") as soon as this function grows.
+	register uint32_t a0 asm("r0") = user_code_start;
+	register uint32_t a1 asm("r1") = (uint32_t)code_size;
+	register uint32_t a2 asm("r2") = user_code_exec;
+	register uint32_t a3 asm("r3") = (uint32_t)buffer;
+	register uint32_t a4 asm("r4") = (uint32_t)funcbuf;
+	asm volatile("blx deluge_chainload" : : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4) : "memory");
 #endif
 }

@@ -49,6 +49,13 @@ void oledMainInit() {
 	MainOLED_WCom(0x20); // SET MEMORRY ADDRESSING MODE
 	MainOLED_WCom(0x00); // Horizontal
 
+	// In horizontal addressing mode the 0x00/0x10 column-start commands above do not move the pointer;
+	// this does. Frames are bare 768-byte DMAs that rely on the pointer wrapping in step, so a re-init
+	// must put it back to column 0 explicitly.
+	MainOLED_WCom(0x21); // SET COLUMN ADDRESS start / end
+	MainOLED_WCom(0x00);
+	MainOLED_WCom(OLED_MAIN_WIDTH_PIXELS - 1);
+
 	/*
 	 MainOLED_WCom(0xB0); // Set Page Start
 */
