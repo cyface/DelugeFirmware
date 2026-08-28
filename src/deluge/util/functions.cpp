@@ -26,6 +26,7 @@
 #include "hid/display/display.h"
 #include "hid/encoders.h"
 #include "modulation/arpeggiator.h"
+#include "plugin/host/plugin_host.h"
 #include "processing/audio_output.h"
 #include "processing/sound/sound.h"
 #include "storage/flash_storage.h"
@@ -777,42 +778,12 @@ char const* oscTypeToString(OscType oscType) {
 	}
 }
 
-char const* drumModelToString(DrumModel model) {
-	switch (model) {
-	case DrumModel::ANALOG_KICK:
-		return "808kick";
-	case DrumModel::ANALOG_SNARE:
-		return "808snare";
-	case DrumModel::HI_HAT:
-		return "hihat";
-	case DrumModel::SYNTH_KICK:
-		return "909kick";
-	case DrumModel::SYNTH_SNARE:
-		return "909snare";
-	case DrumModel::HI_HAT_2:
-		return "hihat2";
-	default:
-		__builtin_unreachable();
-	}
+char const* drumModelToString(uint32_t model) {
+	return deluge::plugin::drumModelInfo(model).fileName;
 }
 
-DrumModel stringToDrumModel(char const* string) {
-	if (!strcmp(string, "808snare")) {
-		return DrumModel::ANALOG_SNARE;
-	}
-	if (!strcmp(string, "hihat")) {
-		return DrumModel::HI_HAT;
-	}
-	if (!strcmp(string, "909kick")) {
-		return DrumModel::SYNTH_KICK;
-	}
-	if (!strcmp(string, "909snare")) {
-		return DrumModel::SYNTH_SNARE;
-	}
-	if (!strcmp(string, "hihat2")) {
-		return DrumModel::HI_HAT_2;
-	}
-	return DrumModel::ANALOG_KICK;
+uint32_t stringToDrumModel(char const* string) {
+	return deluge::plugin::drumModelForFileName(string);
 }
 
 OscType stringToOscType(char const* string) {

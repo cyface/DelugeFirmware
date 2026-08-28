@@ -19,12 +19,13 @@
 #include "gui/menu_item/formatted_title.h"
 #include "gui/menu_item/selection.h"
 #include "gui/ui/sound_editor.h"
+#include "plugin/host/plugin_host.h"
 #include "processing/sound/sound.h"
 #include "processing/source.h"
 
 namespace deluge::gui::menu_item::osc::drum {
 
-/// Which Plaits drum model an OscType::DRUM source plays.
+/// Which of the drum source plugin's models an OscType::DRUM source plays.
 class Model final : public Selection, public FormattedTitle {
 public:
 	Model(l10n::String name, l10n::String title_format_str, uint8_t source_id)
@@ -34,24 +35,20 @@ public:
 
 	deluge::vector<std::string_view> getOptions(OptType optType) override {
 		(void)optType;
-		using enum l10n::String;
-		return {
-		    l10n::getView(STRING_FOR_DRUM_MODEL_808_KICK),  //<
-		    l10n::getView(STRING_FOR_DRUM_MODEL_808_SNARE), //<
-		    l10n::getView(STRING_FOR_DRUM_MODEL_HI_HAT),    //<
-		    l10n::getView(STRING_FOR_DRUM_MODEL_909_KICK),  //<
-		    l10n::getView(STRING_FOR_DRUM_MODEL_909_SNARE), //<
-		    l10n::getView(STRING_FOR_DRUM_MODEL_HI_HAT_2),  //<
-		};
+		const DelugeSourcePlugin& plugin = deluge::plugin::kDrumSourcePlugin;
+		deluge::vector<std::string_view> options;
+		options.reserve(plugin.numModels);
+		for (uint32_t i = 0; i < plugin.numModels; i++) {
+			options.push_back(deluge::plugin::displayName(plugin.modelInfo[i].name));
+		}
+		return options;
 	}
 
-	void readCurrentValue() override {
-		setValue(util::to_underlying(soundEditor.currentSound->sources[sourceId_].drumModel));
-	}
+	void readCurrentValue() override { setValue(soundEditor.currentSound->sources[sourceId_].drumModel); }
 
 	void writeCurrentValue() override {
 		Source& source = soundEditor.currentSound->sources[sourceId_];
-		auto newModel = getValue<DrumModel>();
+		auto newModel = static_cast<uint8_t>(getValue());
 		if (newModel != source.drumModel) {
 			// Voices re-initialise their model on the next note-on; stop the old ones cleanly.
 			soundEditor.currentSound->killAllVoices();

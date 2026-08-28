@@ -16,7 +16,6 @@
  */
 
 #include "model/voice/voice_unison_part_source.h"
-#include "dsp/drums/drum_voice.h"
 #include "dsp/dx/dx7note.h"
 #include "dsp/dx/engine.h"
 #include "memory/general_memory_allocator.h"
@@ -25,6 +24,7 @@
 #include "model/voice/voice.h"
 #include "model/voice/voice_sample.h"
 #include "playback/playback_handler.h"
+#include "plugin/host/plugin_host.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/source.h"
 #include "storage/multi_range/multisample_range.h"
@@ -78,7 +78,7 @@ bool VoiceUnisonPartSource::noteOn(Voice* voice, Source* source, VoiceSamplePlay
 	}
 	else if (synthMode != SynthMode::FM && source->oscType == OscType::DRUM) [[unlikely]] {
 		if (drumVoice == nullptr) {
-			drumVoice = deluge::dsp::drums::solicitDrumVoice();
+			drumVoice = deluge::plugin::SourcePluginVoice::solicit(deluge::plugin::kDrumSourcePlugin);
 			if (drumVoice == nullptr) {
 				return false;
 			}
@@ -119,7 +119,7 @@ void VoiceUnisonPartSource::unassign(bool deletingSong) {
 	}
 
 	if (drumVoice != nullptr) {
-		deluge::dsp::drums::drumVoiceUnassigned(drumVoice);
+		deluge::plugin::SourcePluginVoice::release(drumVoice);
 		drumVoice = nullptr;
 	}
 

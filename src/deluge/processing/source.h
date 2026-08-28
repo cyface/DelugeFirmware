@@ -46,7 +46,7 @@ public:
 
 	DxPatch* dxPatch;
 	bool dxPatchChanged = false;
-	DrumModel drumModel = DrumModel::ANALOG_KICK; // Only used when oscType == OscType::DRUM
+	uint8_t drumModel = 0; // Only used when oscType == OscType::DRUM: model index of the drum source plugin
 	SampleRepeatMode repeatMode;
 
 	int8_t timeStretchAmount;
