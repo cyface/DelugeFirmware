@@ -29,6 +29,10 @@ inline constexpr DelugeFxParamInfo kTapeSaturationParams[TAPE_SATURATION_NUM_PAR
                                       .shortName = "TAPE",
                                       .fileName = "tapeSaturation",
                                       .defaultValue = static_cast<int32_t>(0x80000000)},
+    [TAPE_SATURATION_PARAM_HEAD_BUMP] = {.name = "Head Bump",
+                                         .shortName = "BUMP",
+                                         .fileName = "tapeHeadBump",
+                                         .defaultValue = static_cast<int32_t>(0x80000000)},
 };
 
 inline constexpr DelugeFxPlugin kTapeSaturation = {
