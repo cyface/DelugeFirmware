@@ -24,7 +24,9 @@
  *   - No globals, no statics, no libc: all state lives in a host-owned block of `stateSize` bytes and
  *     everything else arrives through the argument list. This is what keeps a blob free of relocations.
  *   - Every call back into the firmware goes through the DelugePluginHostApi table. Nothing is imported.
- *   - Integer DSP only (q31 samples, host block size), no floating point in the interface.
+ *   - Samples, params and pitch cross the boundary as integers (q31 samples, host block size). A kernel may
+ *     use single-precision float internally: both sides are built -mfloat-abi=hard -mfpu=neon, which makes the
+ *     VFP calling convention part of this ABI, so the host API also offers a few float services.
  */
 #pragma once
 #include <stdint.h>
@@ -34,7 +36,7 @@ extern "C" {
 #endif
 
 /* Bump when any struct or function signature below changes shape. */
-#define DELUGE_PLUGIN_ABI_VERSION 2u
+#define DELUGE_PLUGIN_ABI_VERSION 3u
 
 /* One stereo frame. Same layout as the firmware's StereoSample (asserted host-side), so a plugin
  * renders in place on the firmware's own buffer. */
@@ -54,7 +56,16 @@ typedef struct {
 
 	/* Static (non-antialiased) tanh through the small lookup table, same drive convention. */
 	int32_t (*tanhUnknown)(int32_t input, uint32_t saturationAmount);
+
+	/* 2^x in single precision, for the pitch-ratio maths of float kernels (libm is not linkable from a blob). */
+	float (*exp2f)(float x);
+
+	/* Sine lookup table for float kernels: DELUGE_PLUGIN_SINE_LUT_SIZE + 1 entries, entry i = sin(2*pi*i/SIZE),
+	 * the extra entry a copy of the first so a linear interpolation at phase 1.0 reads no further. */
+	const float* sineLut;
 } DelugePluginHostApi;
+
+#define DELUGE_PLUGIN_SINE_LUT_SIZE 512u
 
 /* Where in the signal chain an insert FX is running. Filled by the host per call. */
 typedef struct {
@@ -97,6 +108,58 @@ typedef struct {
 	DelugeFxIsActiveFn isActive; /* may be NULL */
 	DelugeFxRenderFn render;
 } DelugeFxPlugin;
+
+/* ----------------------------------------------------------------------------------------------------------------
+ * Source plugins: an oscillator type (OscType::DRUM today) whose per-voice DSP is a plugin kernel. The host owns
+ * one state block per voice (per unison part), triggers it on note-on, and asks it for mono q31 blocks until the
+ * kernel reports the voice has finished. The kernel offers a list of models (the Deluge shows them as a menu and
+ * saves the chosen one by its fileName) and up to DELUGE_SOURCE_PLUGIN_MAX_MACROS macro controls that the host
+ * routes from ordinary automatable params.
+ */
+
+#define DELUGE_SOURCE_PLUGIN_MAX_MACROS 3u
+
+/* A display name in both of the Deluge's forms. */
+typedef struct {
+	const char* name;      /* OLED (<= 14 chars) */
+	const char* shortName; /* 7-segment (<= 4 chars) */
+} DelugePluginName;
+
+typedef struct {
+	DelugePluginName name;
+	const char* fileName; /* XML value identifying this model; unique within the plugin */
+	/* What each macro means for this model (a kick's third macro is Drive, a snare's Snappy). Unused macros NULL. */
+	DelugePluginName macros[DELUGE_SOURCE_PLUGIN_MAX_MACROS];
+} DelugeSourceModelInfo;
+
+/* Reset a voice's state block to silence for `model` (an index below numModels). `seed` initialises whatever noise
+ * source the kernel keeps in the voice, so two hits never share a noise pattern. Leaves the voice untriggered. */
+typedef void (*DelugeSourceInitFn)(void* state, uint32_t model, uint32_t seed);
+
+/* Arm a hit: the next render starts a new note at `accent` (q31, 0..INT32_MAX = 0..1, from velocity). Calling it
+ * on a still-ringing voice restarts the excitation without clearing the resonators, like hitting a real drum. */
+typedef void (*DelugeSourceTriggerFn)(void* state, int32_t accent);
+
+/* Render `numSamples` mono q31 samples into `out`. `macros` holds `numMacros` q31 values (0..INT32_MAX = 0..1),
+ * `phaseIncrement` is the note's fundamental as the firmware's q32 cycles-per-sample (2^32 = the sample rate),
+ * `scratch` is `scratchSize` bytes of host-lent working memory valid for this call only. Returns nonzero while the
+ * voice is still sounding; 0 once it has decayed to silence and the host may release it. */
+typedef int32_t (*DelugeSourceRenderFn)(const DelugePluginHostApi* api, void* state, const int32_t* macros,
+                                        uint32_t phaseIncrement, int32_t* out, uint32_t numSamples, void* scratch);
+
+typedef struct {
+	uint32_t abiVersion; /* DELUGE_PLUGIN_ABI_VERSION the plugin was built against */
+	const char* name;    /* short display name of the plugin itself */
+	uint32_t numModels;  /* entries in `modelInfo` */
+	const DelugeSourceModelInfo* modelInfo;
+	uint32_t numMacros;      /* <= DELUGE_SOURCE_PLUGIN_MAX_MACROS; what `macros` holds at render time */
+	uint32_t voiceStateSize; /* bytes of state the host allocates per voice (4-byte aligned) */
+	uint32_t scratchSize;    /* bytes of scratch the host lends to every render call (4-byte aligned) */
+	uint32_t maxBlockSize;   /* the most samples one render call accepts */
+	DelugeSourceInitFn init;
+	DelugeSourceTriggerFn trigger;
+	DelugeSourceRenderFn render;
+} DelugeSourcePlugin;
 
 #ifdef __cplusplus
 }

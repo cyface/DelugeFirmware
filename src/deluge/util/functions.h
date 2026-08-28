@@ -154,8 +154,8 @@ void getInstrumentPresetFilename(char const* filePrefix, int16_t presetNumber, i
                                  char* fileName);
 char const* oscTypeToString(OscType osctype);
 OscType stringToOscType(char const* string);
-char const* drumModelToString(DrumModel model);
-DrumModel stringToDrumModel(char const* string);
+char const* drumModelToString(uint32_t model);
+uint32_t stringToDrumModel(char const* string);
 
 char const* lfoTypeToString(LFOType oscType);
 LFOType stringToLFOType(char const* string);

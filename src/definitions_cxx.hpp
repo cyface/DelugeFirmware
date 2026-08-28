@@ -372,16 +372,6 @@ enum class OscType : uint8_t {
 };
 
 /// Which of the Mutable Instruments Plaits drum models an OscType::DRUM source plays.
-enum class DrumModel : uint8_t {
-	ANALOG_KICK,  // 808-style bridged-T resonator kick
-	ANALOG_SNARE, // 808-style two-mode shell + filtered noise
-	HI_HAT,       // six square oscillators into clocked noise, BPF/HPF
-	SYNTH_KICK,   // 909-style FM sine kick
-	SYNTH_SNARE,  // 909-style sine pair + noise
-	HI_HAT_2,     // ring-modulated oscillator pairs, two-stage envelope (Plaits' AUX hi-hat)
-};
-constexpr int32_t kNumDrumModels = util::to_underlying(DrumModel::HI_HAT_2) + 1;
-
 constexpr OscType kLastRingmoddableOscType = OscType::WAVETABLE;
 constexpr int32_t kNumOscTypesRingModdable = util::to_underlying(kLastRingmoddableOscType) + 1;
 constexpr int32_t kNumOscTypes = util::to_underlying(OscType::INPUT_STEREO) + 1;

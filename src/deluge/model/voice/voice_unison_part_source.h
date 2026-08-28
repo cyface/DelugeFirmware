@@ -27,8 +27,8 @@ class Voice;
 class VoiceSample;
 class LivePitchShifter;
 class DxVoice;
-namespace deluge::dsp::drums {
-class DrumVoice;
+namespace deluge::plugin {
+class SourcePluginVoice;
 }
 
 class VoiceUnisonPartSource {
@@ -49,5 +49,5 @@ public:
 	VoiceSample* voiceSample = nullptr;
 	LivePitchShifter* livePitchShifter = nullptr;
 	DxVoice* dxVoice = nullptr;
-	deluge::dsp::drums::DrumVoice* drumVoice = nullptr;
+	deluge::plugin::SourcePluginVoice* drumVoice = nullptr; // OscType::DRUM: one voice of the drum source plugin
 };
