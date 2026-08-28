@@ -30,6 +30,20 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Format website
         run: pnpm run check:fix
+      # autofix.ci pushes the formatting fix, but it needs the autofix.ci GitHub App
+      # installed on the repository. Upstream has it; forks generally do not, so on a
+      # fork we just fail the job with the diff and let the author run
+      # `pnpm run check:fix` locally.
       - uses: autofix-ci/action@v1
+        if: github.repository_owner == 'SynthstromAudible'
         with:
           commit-message: "Apply Prettier format"
+
+      - name: Check formatting (no autofix.ci app on this repo)
+        if: github.repository_owner != 'SynthstromAudible'
+        run: |
+          if ! git diff --exit-code --stat; then
+            echo "::error::Website formatting is out of date. Run 'pnpm run check:fix' in website/ and commit the result."
+            git diff
+            exit 1
+          fi
