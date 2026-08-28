@@ -14,15 +14,19 @@ and songs (`tapeSaturation`, `tapeHeadBump`), and available in the automation vi
 global contexts. The 7-segment display shows `TAPE` and `BUMP`.
 
 Rough guide to the Tape knob (retapered 2026-08-28 after hardware feedback that the original ramp was
-already crunchy above 7/50 — the lower half now covers one 6dB drive step, the upper half the rest):
+already crunchy above 7/50: drive is now `8 · knob³` six-dB steps instead of `8 · knob`, so half the
+knob is one step and only the last fifth climbs steeply):
 
 | Range | Behaviour |
 |---|---|
-| 0 | Off (bypassed entirely) |
+| 0 | Off (bypassed entirely, unless Head Bump is up) |
 | 1–50% | Subtle zone: unity level, 3rd harmonic stays below −46dB on a device-level sine, peaks round gently, fast transients darken a little |
-| 50–75% | Clearly audible tape warmth: softened top end, 2nd/3rd harmonic body, peak compression (this is the old 6–25) |
-| 75–86% | Heavy: ceiling drops to 2^18.4 on a synth, 3rd harmonic around −10dB |
-| 86–100% | Rising drive: quieter sources get boosted (up to +12dB) into full tape crush |
+| 50–75% | Clearly audible tape warmth: softened top end, 2nd/3rd harmonic body, peak compression (this is the old 6–20) |
+| 75–90% | Heavy: ceiling drops towards 2^18.4 on a synth, 3rd harmonic around −10dB |
+| 90–100% | Rising drive: quieter sources get boosted (up to +12dB) into full tape crush |
+
+Note that the design compresses highs first (that is the point of the emphasis pair), so the top end
+softens as the knob goes up; on a hot 10kHz sine that is already −3dB at 5 and −5dB at 30.
 
 **Head Bump** adds the low-frequency weight of a tape machine's playback head: a broad +8dB (at
 100%) hump centred on 60–70Hz that fades to +2dB by 170Hz and a slight −2dB dip around 300Hz, with
@@ -65,10 +69,12 @@ x ──► pre-emphasis ──► × drive ──► slew avg ──► biased 
 Two stages borrowed from Airwindows ToTape9 (MIT) and reformulated in fixed point (fork issue #40):
 
 6. **Slew-dependent averaging** — a 2-tap average `(u[n] + u[n−1])/2` is mixed into the shaper input
-   in proportion to `|Δu|` measured in the shaper's own units (so it scales with drive automatically:
-   weight = min(|Δ| · 2^(sat−2) / 2^31, 1)), and the same weight of averaging is applied to the shaper
-   output. Sustained material is untouched; fast transients come back darker, the "TapeHack" effect.
-   Shift/add only.
+   in proportion to `|Δu|` normalised to the insertion point's level (weight =
+   min(|Δ| · 2^(levelShift−2) / 2^31, 0.5) — a few percent on typical material, ToTape9's proportions),
+   and the same weight of averaging is applied to the shaper output. Sustained material is untouched;
+   fast transients come back darker, the "TapeHack" effect. Shift/add only. Deliberately not scaled by
+   drive: a first version that was saturated to a full average past half the knob and wiped the top
+   end off everything (hardware feedback, 2026-08-28).
 7. **Head bump** — the post-makeup signal, normalised to the shaper scale, feeds a leaky integrator
    (`hb += x·0.1 − hb·leak₁₂₀Hz`) with a cubic self-limit (`hb −= hb³·0.0618`), then one band-pass
    biquad (68.75Hz, Q 0.618, q30 coefficients, 64-bit products), mixed back in by the Head Bump knob
@@ -108,9 +114,9 @@ proves it has no relocations, imports or writable sections, i.e. it is ready for
 
 ### Knob taper and gain staging
 
-The knob is first mapped to a drive value in "eighth steps" (6dB each): `drive = knob/2` steps below
-50%, `1 + 7·(knob−50%)/50%` above, q29. Everything below (shift, fine gain, bias) is computed from
-`drive`, so the sections that follow describe the drive axis; "knob" positions in them are pre-retaper.
+The knob is first mapped to a drive value in "eighth steps" (6dB each): `drive = 8 · knob³` steps, q29
+(knob³ in q32 is exactly that). Everything below (shift, fine gain, bias) is computed from `drive`, so
+the sections that follow describe the drive axis; "knob" positions in them are pre-retaper.
 
 The three insertion points run at very different internal levels — measured during real song
 playback: a lone Sound peaks around 2^20–21, kit/audio-clip summing around 2^22–23, and the song
