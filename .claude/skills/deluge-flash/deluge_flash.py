@@ -281,9 +281,19 @@ def wait_for_return(port_index: int | None, timeout: float) -> str | None:
             with contextlib.suppress(Exception):
                 return probe(port_index, quiet=True)
         time.sleep(0.5)
+    outs, _ = deluge_ports(rt)
+    shape = (
+        "it is still enumerated on USB but silent: it froze in the chainloader or in early boot, before "
+        "the new image reset the USB controller (chainloader/cache/relocation territory)"
+        if outs
+        else "it is OFF the USB bus entirely: the new image got far enough into deluge_main to reset the USB "
+        "controller and hung after that (or is stuck in USB host mode)"
+    )
     raise Fail(
-        "device did not answer within the timeout after the load. If the screen is blank or shows Exxx, "
-        "power-cycle it: this reverts to the SD-installed firmware, nothing is lost."
+        "device did not answer within the timeout after the load - "
+        + shape
+        + ". If the screen is blank or "
+        "shows Exxx, power-cycle it: this reverts to the SD-installed firmware, nothing is lost."
     )
 
 
