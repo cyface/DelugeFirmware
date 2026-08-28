@@ -24,10 +24,12 @@
 extern "C" {
 #endif
 
-/* params[TAPE_SATURATION_PARAM_AMOUNT]: the Tape knob as a raw q31 unpatched value. */
+/* Raw q31 unpatched values: AMOUNT is the Tape knob (drive/character, minimum = off), HEAD_BUMP the amount of
+ * low-frequency head bump mixed back in (minimum = none). */
 enum {
 	TAPE_SATURATION_PARAM_AMOUNT = 0,
-	TAPE_SATURATION_NUM_PARAMS = 1,
+	TAPE_SATURATION_PARAM_HEAD_BUMP = 1,
+	TAPE_SATURATION_NUM_PARAMS = 2,
 };
 
 /* Host-owned per-instance state. Index 0 = left, 1 = right. */
@@ -36,6 +38,11 @@ typedef struct {
 	int32_t deEmphLast[2];
 	int32_t dcBlock[2];
 	uint32_t tanhWorkingValue[2];
+	int32_t slewLastIn[2];    /* previous shaper input, for the 2-tap average */
+	int32_t slewLastDark[2];  /* previous averaged input, for the slew measure */
+	int32_t slewLastOut[2];   /* previous shaper output, for the post-shaper average */
+	int32_t headBump[2];      /* leaky, cubic-limited integrator */
+	int32_t headBumpBp[2][2]; /* band-pass biquad, transposed direct form II state */
 } TapeSaturationState;
 
 void tape_saturation_reset(void* state);

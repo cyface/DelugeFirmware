@@ -174,7 +174,7 @@ static_assert(UNPATCHED_START > PLACEHOLDER_RANGE, "UNPATCHED params collide wit
 /// Shared unpatched params reserved for insert-FX plugins. plugin/host/fx_plugin_bank.h hands them out to the
 /// registered plugins and names them (display, XML, defaults, menus, automation all derive from the plugin's own
 /// param table). Bump this when the registered plugins' param total changes - the registry static_asserts they agree.
-constexpr ParamType kNumFxPluginParams = 1;
+constexpr ParamType kNumFxPluginParams = 2;
 
 /// IDs for UNPATCHED_* params, for all ModControllables. This is the prefix of UNPATCHED params shared between Sounds
 /// and GlobalEffectables.
