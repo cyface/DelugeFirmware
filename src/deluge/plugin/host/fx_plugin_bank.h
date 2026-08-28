@@ -34,7 +34,7 @@ inline constexpr std::array<const DelugeFxPlugin*, 1> kBuiltinFxPlugins = {&buil
 inline constexpr uint32_t kNumBuiltinFxPlugins = kBuiltinFxPlugins.size();
 
 /// Largest per-instance state block a slot can hold, and the most params one plugin may declare.
-inline constexpr uint32_t kFxPluginMaxStateBytes = 64;
+inline constexpr uint32_t kFxPluginMaxStateBytes = 128;
 inline constexpr uint32_t kMaxParamsPerFxPlugin = 8;
 
 /// Bank offset of a plugin's first param (plugins occupy the bank contiguously, in registry order).
