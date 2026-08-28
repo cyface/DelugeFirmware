@@ -116,9 +116,11 @@ void tape_saturation_reset(void* state) {
 	}
 }
 
-/* The knob at its minimum is "off": bypassed entirely rather than a zero-drive pass through the shaper. */
+/* Both knobs at minimum is "off": bypassed entirely. Either one turned up runs the whole kernel (with Tape at 0 the
+ * shaper sits at its minimum drive and is close to transparent, so Head Bump works on its own). */
 int32_t tape_saturation_is_active(const int32_t* params) {
-	return params[TAPE_SATURATION_PARAM_AMOUNT] != (int32_t)0x80000000;
+	return params[TAPE_SATURATION_PARAM_AMOUNT] != (int32_t)0x80000000
+	       || params[TAPE_SATURATION_PARAM_HEAD_BUMP] != (int32_t)0x80000000;
 }
 
 void tape_saturation_render(const DelugePluginHostApi* api, void* state, const int32_t* params,
@@ -127,17 +129,11 @@ void tape_saturation_render(const DelugePluginHostApi* api, void* state, const i
 
 	uint32_t positive = (uint32_t)params[TAPE_SATURATION_PARAM_AMOUNT] + 2147483648u;
 
-	/* Knob taper (fork #40 feedback: a straight 6dB-per-eighth ramp was already crunchy at 14%): the lower half of
-	 * the knob spans ONE 6dB drive step, the upper half the remaining seven, so the subtle zone takes half the
-	 * travel and the top still reaches the same drive. `drive` is in eighth-of-the-old-knob steps, q29. */
-	uint32_t drive;
-	if (positive < 2147483648u) {
-		drive = positive >> 2;
-	}
-	else {
-		uint32_t upper = positive - 2147483648u;
-		drive = (1u << 29) + upper + (upper >> 1) + (upper >> 2); /* 1 + 7 * upper/2^31 steps, max 2^32 - 3 */
-	}
+	/* Knob taper (fork #40 feedback: a straight 6dB-per-eighth ramp was already crunchy at 14%): drive = 8 * knob^3
+	 * steps of 6dB, so half the knob is one step (the subtle zone), 70% is 2.7 steps, and only the last fifth
+	 * climbs to the full eight. `drive` is in those steps, q29: knob^3 in q32 is exactly that. */
+	uint32_t knob2 = (uint32_t)(((uint64_t)positive * positive) >> 32);
+	uint32_t drive = (uint32_t)(((uint64_t)knob2 * positive) >> 32);
 
 	/* Drive is fineGain * 2^driveShift, continuous across the whole knob. The context's level shift anchors the
 	 * knob to that insertion point's real internal levels, which sit well below q31 full scale; 2 of its steps
@@ -168,10 +164,11 @@ void tape_saturation_render(const DelugePluginHostApi* api, void* state, const i
 	int32_t biasInput = (int32_t)(drive >> 5) >> saturationAmount;
 	int32_t outOffset = api->tanhUnknown(biasInput, saturationAmount);
 
-	/* Slew measure: |delta| of the shaper input in the shaper's own units (1.0 = the tanh table edge, i.e.
-	 * driven << saturationAmount), times 0.25, clamped to 1.0. That is ToTape9's 0.12 * 2 at 44.1kHz, and it
-	 * scales with drive on its own: the harder the tape is pushed, the more transients are darkened. */
-	uint32_t slewShift = saturationAmount - 2; /* saturationAmount >= levelShift >= 4 */
+	/* Slew measure: |delta| of the shaper input, normalised to this insertion point's level (1.0 = q31 full
+	 * scale >> levelShift, i.e. roughly the loudest the signal here gets), times 0.25 - ToTape9's 0.12 * 2 at
+	 * 44.1kHz on its +-1.0 signals - and capped at 0.5. Deliberately NOT scaled by drive: a first version that
+	 * was saturated to a full 2-tap average past half the knob and wiped the top end off everything. */
+	uint32_t slewShift = driveBase - 2; /* levelShift >= 4 */
 
 	/* Head bump: the knob only sets the mix (0.5 * amount, q32), so it is linear in loudness; the integrator's
 	 * drive and self-limit are fixed at ToTape9's proportions. */
@@ -203,7 +200,7 @@ void tape_saturation_render(const DelugePluginHostApi* api, void* state, const i
 				delta = -delta;
 			}
 			delta <<= slewShift;
-			int32_t w = delta > 0x7FFFFFFF ? 0x7FFFFFFF : (int32_t)delta; /* q31 mix weight */
+			int32_t w = delta > 0x40000000 ? 0x40000000 : (int32_t)delta; /* q31 mix weight, <= 0.5 */
 			s->slewLastDark[ch] = dark;
 			driven += mulHigh(dark - driven, w) << 1;
 
