@@ -11,6 +11,8 @@ as `OscType::DRUM`).
 
 ```
 plugin/plugin_abi.h            the ABI: host API table, FX context, param info, both plugin descriptors (C, freestanding)
+plugin/plugin_blob.h           the .dlp container: header/table layout, validation, and binding a file to the above
+plugin/plugin.ld               links a kernel into one relocation-free image (.text + .rodata) at address 0
 plugin/fx/<name>.{h,c}         insert-FX kernels - plain C, no globals/statics/libc, firmware only via the API table
 plugin/source/<name>.{h,c}     source kernels, same rules (plaits_drums = the Plaits drum models; README.md there)
 plugin/host/builtin_fx.h       constexpr descriptors (incl. param tables) for the FX kernels compiled in
@@ -19,6 +21,9 @@ plugin/host/fx_plugin_bank.h   the FX registry: assigns each plugin its slots in
                                constexpr lookups everything else derives names/defaults from
 plugin/host/plugin_host.*      the firmware's API table, FxPluginSlot / FxPluginChain, SourcePluginVoice
 plugin/check_freestanding.sh   builds each kernel as a blob would be and fails on any contract breach
+plugin/tools/pack_dlp.py       builds a kernel into a .dlp and verifies the file reads back as the descriptor it came from
+plugin/tools/dump_builtin_*    the built-in descriptors as JSON, so the packer has no second copy of the names
+plugin/tools/read_dlp.c        parses a .dlp with plugin_blob.h (the loader's own code) and prints what it binds
 ```
 
 ## The param bank
@@ -78,16 +83,58 @@ minimum); the host bypasses it then and it costs nothing.
   host-lent working memory valid for that call only (the drums put their float render buffer and the
   ring-mod hi-hat's two temporaries there rather than in the voice).
 
-## Towards tier 2 (a blob loaded from the card) - what this pilot taught
+## The .dlp container (tier 2, in progress)
+
+A `.dlp` is a descriptor turned into position-independent data: the same fields `DelugeFxPlugin` /
+`DelugeSourcePlugin` carry, but every pointer replaced by an offset, because the file gets copied to
+whatever SDRAM address is free.
+
+```
++0                header   magic "DLPB", container format version, ABI version, kind, sizes, CRC-32
+                  desc     DelugeFxBlobDesc | DelugeSourceBlobDesc - sizes and entry points
+                  tables   param / model rows, names as string-table offsets
+                  strings  every name once, NUL-terminated (offset 0 means NULL: the header sits there)
++imageOffset      image    .text + .rodata exactly as plugin.ld linked it, 32-byte (cache-line) aligned
+```
+
+Entry points are offsets into the image with the Thumb bit set, as the ELF symbol carries them, so the host's
+function pointer is `imageBase + entry`. Strings are read in place, so the loader keeps the file resident and
+copies only the image into executable SDRAM (with the L2 clean+invalidate from the #37 spike).
+`plugin_blob.h` is the whole format: `deluge_plugin_blob_validate()` checks shape, CRC and that every offset
+lands inside the file; `_bind_fx()` / `_bind_source()` then fill in the ordinary descriptor the rest of the
+firmware already consumes. Both are freestanding C, so the offline tools and the firmware loader parse a blob
+with the same code.
+
+Build one:
+
+```
+src/deluge/plugin/tools/pack_dlp.py --all --out build/plugins        # every built-in
+src/deluge/plugin/tools/pack_dlp.py Tape --out /Volumes/DELUGE/PLUGINS/tape.dlp
+```
+
+The packer takes the plugin's names, tables and sizes from the *firmware's own* `builtin_*.h` descriptors
+(via `dump_builtin_descriptors`, where each entry-point symbol name is `static_assert`ed to be the function the
+descriptor points at), re-checks every `sizeof` by compiling a `_Static_assert` for the target, links the kernel
+with `plugin.ld`, refuses any import or leftover relocation, and then reads the finished file back through
+`read_dlp` - i.e. through `plugin_blob.h` - and diffs it field by field against the descriptor it started from.
+`--self-test` additionally corrupts each blob (CRC, magic, format version, ABI version, kind, truncation, a
+name offset past the end, an out-of-range and a non-Thumb entry point) and requires the parser to reject each
+for the right reason. `check_freestanding.sh` runs all of that after its per-kernel checks.
+
+**Param-bank policy for loaded FX: fixed at boot.** A loaded FX gets its slots in `params::kNumFxPluginParams`
+the same way a built-in does - in registry order, decided once during the boot scan - rather than being assigned
+dynamically as songs load. It keeps XML round-tripping by attribute name (as today), keeps `fxBankSlot()` a
+plain lookup, and matches the use case: the card's plugin set changes between boots, not between songs.
+
+## Towards tier 2 (a blob loaded from the card) - what the pilots taught
 
 The drums were ported with the loader in mind, so the remaining gap is known:
 
 - **Descriptors must come from data, not code.** A blob cannot carry `kPlaitsDrums` as-is: its string
-  and function pointers are absolute addresses. The file header needs the same fields as
-  `DelugeSourcePlugin` with names as offsets into a string table and entry points as offsets into
-  `.text`; the loader builds the descriptor the host already consumes. Nothing host-side needs to
-  change for that, because every consumer (menus, XML, voice allocation) already reads the
-  descriptor rather than an enum.
+  and function pointers are absolute addresses. That is what `plugin_blob.h` is: the same fields with names as
+  offsets into a string table and entry points as offsets into `.text`, and a bind step that hands the host the
+  descriptor it already consumes. Nothing host-side needs to change for that, because every consumer (menus,
+  XML, voice allocation) already reads the descriptor rather than an enum.
 - **`.rodata` ships with the blob.** A real kernel has small constant tables (GCC's `switch` tables
   here); the image is `.text` + `.rodata` copied together, and the check script now distinguishes
   PC-relative relocations (fine) from absolute ones (not).
@@ -98,9 +145,9 @@ The drums were ported with the loader in mind, so the remaining gap is known:
   the host keeps hits varied and the blob relocation-free.
 - **Scratch is a host loan.** Kernels that need more working memory than a voice should hold ask for
   it per call (`scratchSize`) instead of keeping `static` buffers.
-- Still open: the loader itself (`PLUGINS/` scan, header parse, SDRAM placement with the L2
-  clean+invalidate rules from the #37 spike), an ABI handshake that refuses a mismatched
-  `abiVersion`, fault attribution and safe boot, and letting a loaded plugin register a new
+- Still open (fork issue #41): the loader itself (`PLUGINS/` scan, reading the file, SDRAM placement with the L2
+  clean+invalidate rules from the #37 spike, swapping the loaded descriptor in for the built-in of the same
+  name), fault attribution, a safe boot that skips `PLUGINS/`, and letting a loaded plugin register a new
   `OscType`/menu entry rather than only replacing the built-in drum plugin.
 
 ## Adding an insert FX
@@ -144,4 +191,4 @@ of `.rodata` as a blob.
 `fx/tape_saturation.c` is the first kernel: the Tape saturation effect, moved here unchanged from
 `ModControllableAudio` and verified bit-exact against the inline original (native harness, 3960
 random blocks over all three drive bases, knob boundaries, block sizes 1/64/128, on/off toggling).
-352 bytes of position-independent Thumb-2 as a blob.
+1.4 KB of position-independent Thumb-2 as a blob.
