@@ -20,11 +20,13 @@
 #include "gui/menu_item/selection.h"
 #include "gui/menu_item/submenu.h"
 #include "gui/ui/sound_editor.h"
+#include "model/settings/runtime_feature_settings.h"
 #include "model/song/song.h"
 #include "processing/engines/audio_engine.h"
 #include "processing/sound/sound.h"
 #include "processing/source.h"
 #include "util/comparison.h"
+#include <algorithm>
 
 #include <hid/display/oled.h>
 
@@ -39,19 +41,57 @@ public:
 
 	bool mayUseDx() const { return !soundEditor.editingKit() && sourceId_ == 0; }
 
-	void readCurrentValue() override {
-		int32_t rawVal = static_cast<int32_t>(soundEditor.currentSound->sources[sourceId_].oscType);
-		if (!mayUseDx() && rawVal > static_cast<int32_t>(OscType::DX7)) {
-			rawVal -= 1;
+	/// Drum models are hidden until the community feature is enabled, but a preset that already uses one
+	/// must still be able to display (and keep) its type.
+	bool mayUseDrum() const {
+		return runtimeFeatureSettings.get(RuntimeFeatureSettingType::EnableDrumModels) == RuntimeFeatureStateToggle::On
+		       || soundEditor.currentSound->sources[sourceId_].oscType == OscType::DRUM;
+	}
+
+	/// The OscTypes offered by this menu, in display order. Indexes into this list are the Selection's values.
+	deluge::vector<OscType> visibleTypes() const {
+		deluge::vector<OscType> types = {
+		    OscType::SINE, OscType::TRIANGLE,     OscType::SQUARE,    OscType::ANALOG_SQUARE,
+		    OscType::SAW,  OscType::ANALOG_SAW_2, OscType::WAVETABLE,
+		};
+		if (soundEditor.currentSound->getSynthMode() == SynthMode::RINGMOD) {
+			return types;
 		}
-		setValue(rawVal);
+		types.push_back(OscType::SAMPLE);
+		if (mayUseDx()) {
+			types.push_back(OscType::DX7);
+		}
+		if (mayUseDrum()) {
+			types.push_back(OscType::DRUM);
+		}
+		if (AudioEngine::micPluggedIn || AudioEngine::lineInPluggedIn) {
+			types.push_back(OscType::INPUT_L);
+			types.push_back(OscType::INPUT_R);
+			types.push_back(OscType::INPUT_STEREO);
+		}
+		else {
+			types.push_back(OscType::INPUT_L);
+		}
+		return types;
+	}
+
+	void readCurrentValue() override {
+		const OscType current = soundEditor.currentSound->sources[sourceId_].oscType;
+		const auto types = visibleTypes();
+		int32_t index = 0;
+		for (size_t i = 0; i < types.size(); i++) {
+			if (types[i] == current) {
+				index = static_cast<int32_t>(i);
+				break;
+			}
+		}
+		setValue(index);
 	}
 	void writeCurrentValue() override {
 		OscType oldValue = soundEditor.currentSound->sources[sourceId_].oscType;
-		auto newValue = getValue<OscType>();
-		if (!mayUseDx() && static_cast<int32_t>(newValue) >= static_cast<int32_t>(OscType::DX7)) {
-			newValue = static_cast<OscType>(static_cast<int32_t>(newValue) + 1);
-		}
+		const auto types = visibleTypes();
+		const int32_t index = std::clamp<int32_t>(getValue(), 0, static_cast<int32_t>(types.size()) - 1);
+		OscType newValue = types[index];
 
 		const auto needs_unassignment = {
 		    OscType::INPUT_L,
@@ -59,6 +99,7 @@ public:
 		    OscType::INPUT_STEREO,
 		    OscType::SAMPLE,
 		    OscType::DX7,
+		    OscType::DRUM,
 
 		    // Haven't actually really determined if this needs to be here - maybe not?
 		    OscType::WAVETABLE,
@@ -80,35 +121,51 @@ public:
 	deluge::vector<std::string_view> getOptions(OptType optType) override {
 		(void)optType;
 		using enum l10n::String;
-		deluge::vector options = {
-		    l10n::getView(STRING_FOR_SINE),          //<
-		    l10n::getView(STRING_FOR_TRIANGLE),      //<
-		    l10n::getView(STRING_FOR_SQUARE),        //<
-		    l10n::getView(STRING_FOR_ANALOG_SQUARE), //<
-		    l10n::getView(STRING_FOR_SAW),           //<
-		    l10n::getView(STRING_FOR_ANALOG_SAW),    //<
-		    l10n::getView(STRING_FOR_WAVETABLE),     //<
-		};
-
-		if (soundEditor.currentSound->getSynthMode() == SynthMode::RINGMOD) {
-			return options;
+		const bool stereoInputs = AudioEngine::micPluggedIn || AudioEngine::lineInPluggedIn;
+		deluge::vector<std::string_view> options;
+		for (OscType type : visibleTypes()) {
+			switch (type) {
+			case OscType::SINE:
+				options.emplace_back(l10n::getView(STRING_FOR_SINE));
+				break;
+			case OscType::TRIANGLE:
+				options.emplace_back(l10n::getView(STRING_FOR_TRIANGLE));
+				break;
+			case OscType::SQUARE:
+				options.emplace_back(l10n::getView(STRING_FOR_SQUARE));
+				break;
+			case OscType::ANALOG_SQUARE:
+				options.emplace_back(l10n::getView(STRING_FOR_ANALOG_SQUARE));
+				break;
+			case OscType::SAW:
+				options.emplace_back(l10n::getView(STRING_FOR_SAW));
+				break;
+			case OscType::ANALOG_SAW_2:
+				options.emplace_back(l10n::getView(STRING_FOR_ANALOG_SAW));
+				break;
+			case OscType::WAVETABLE:
+				options.emplace_back(l10n::getView(STRING_FOR_WAVETABLE));
+				break;
+			case OscType::SAMPLE:
+				options.emplace_back(l10n::getView(STRING_FOR_SAMPLE));
+				break;
+			case OscType::DX7:
+				options.emplace_back(l10n::getView(STRING_FOR_DX7));
+				break;
+			case OscType::DRUM:
+				options.emplace_back(l10n::getView(STRING_FOR_DRUM));
+				break;
+			case OscType::INPUT_L:
+				options.emplace_back(l10n::getView(stereoInputs ? STRING_FOR_INPUT_LEFT : STRING_FOR_INPUT));
+				break;
+			case OscType::INPUT_R:
+				options.emplace_back(l10n::getView(STRING_FOR_INPUT_RIGHT));
+				break;
+			case OscType::INPUT_STEREO:
+				options.emplace_back(l10n::getView(STRING_FOR_INPUT_STEREO));
+				break;
+			}
 		}
-
-		options.emplace_back(l10n::getView(STRING_FOR_SAMPLE));
-
-		if (mayUseDx()) {
-			options.emplace_back(l10n::getView(STRING_FOR_DX7));
-		}
-
-		if (AudioEngine::micPluggedIn || AudioEngine::lineInPluggedIn) {
-			options.emplace_back(l10n::getView(STRING_FOR_INPUT_LEFT));
-			options.emplace_back(l10n::getView(STRING_FOR_INPUT_RIGHT));
-			options.emplace_back(l10n::getView(STRING_FOR_INPUT_STEREO));
-		}
-		else {
-			options.emplace_back(l10n::getView(STRING_FOR_INPUT));
-		}
-
 		return options;
 	}
 
@@ -130,7 +187,7 @@ public:
 		oled_canvas::Canvas& image = OLED::main;
 
 		const OscType osc_type = soundEditor.currentSound->sources[sourceId_].oscType;
-		if (osc_type == OscType::DX7) {
+		if (osc_type == OscType::DX7 || osc_type == OscType::DRUM) {
 			const auto option = getOptions(OptType::FULL)[getValue()].data();
 			return image.drawStringCentered(option, slot.start_x, slot.start_y + kHorizontalMenuSlotYOffset + 5,
 			                                kTextTitleSpacingX, kTextTitleSizeY, slot.width);

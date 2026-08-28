@@ -18,11 +18,12 @@
 #include "definitions_cxx.hpp"
 #include "gui/menu_item/formatted_title.h"
 #include "gui/menu_item/source/patched_param.h"
+#include "hid/display/oled.h"
 #include "modulation/params/param_set.h"
 #include "processing/sound/sound.h"
 
 namespace deluge::gui::menu_item::osc {
-class PulseWidth final : public source::PatchedParam, public FormattedTitle {
+class PulseWidth final : public menu_item::source::PatchedParam, public FormattedTitle {
 public:
 	PulseWidth(l10n::String name, l10n::String title_format_str, int32_t newP, uint8_t source_id)
 	    : PatchedParam(name, newP, source_id), FormattedTitle(title_format_str, source_id + 1) {}
@@ -48,12 +49,13 @@ public:
 			return source.hasAtLeastOneAudioFileLoaded();
 		}
 
+		// Drum models reuse this param as their Tone macro, shown by osc::drum::Tone instead
 		return oscType != OscType::SAMPLE && oscType != OscType::INPUT_L && oscType != OscType::INPUT_R
-		       && oscType != OscType::INPUT_STEREO;
+		       && oscType != OscType::INPUT_STEREO && oscType != OscType::DRUM;
 	}
 
 	void renderInHorizontalMenu(const SlotPosition& slot) override {
-		oled_canvas::Canvas& image = OLED::main;
+		deluge::hid::display::oled_canvas::Canvas& image = deluge::hid::display::OLED::main;
 
 		const float norm = getValue() / 50.0f;
 

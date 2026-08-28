@@ -769,9 +769,50 @@ char const* oscTypeToString(OscType oscType) {
 	case OscType::DX7:
 		return "dx7";
 
+	case OscType::DRUM:
+		return "drum";
+
 	default:
 		__builtin_unreachable();
 	}
+}
+
+char const* drumModelToString(DrumModel model) {
+	switch (model) {
+	case DrumModel::ANALOG_KICK:
+		return "808kick";
+	case DrumModel::ANALOG_SNARE:
+		return "808snare";
+	case DrumModel::HI_HAT:
+		return "hihat";
+	case DrumModel::SYNTH_KICK:
+		return "909kick";
+	case DrumModel::SYNTH_SNARE:
+		return "909snare";
+	case DrumModel::HI_HAT_2:
+		return "hihat2";
+	default:
+		__builtin_unreachable();
+	}
+}
+
+DrumModel stringToDrumModel(char const* string) {
+	if (!strcmp(string, "808snare")) {
+		return DrumModel::ANALOG_SNARE;
+	}
+	if (!strcmp(string, "hihat")) {
+		return DrumModel::HI_HAT;
+	}
+	if (!strcmp(string, "909kick")) {
+		return DrumModel::SYNTH_KICK;
+	}
+	if (!strcmp(string, "909snare")) {
+		return DrumModel::SYNTH_SNARE;
+	}
+	if (!strcmp(string, "hihat2")) {
+		return DrumModel::HI_HAT_2;
+	}
+	return DrumModel::ANALOG_KICK;
 }
 
 OscType stringToOscType(char const* string) {
@@ -808,6 +849,9 @@ OscType stringToOscType(char const* string) {
 	}
 	else if (!strcmp(string, "dx7")) {
 		return OscType::DX7;
+	}
+	else if (!strcmp(string, "drum")) {
+		return OscType::DRUM;
 	}
 	else {
 		return OscType::TRIANGLE;

@@ -56,6 +56,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	ShiftIsSticky,
 	LightShiftLed,
 	EnableDX7Engine,
+	EnableDrumModels,
 	EmulatedDisplay,
 	EnableKeyboardViewSidebarMenuExit,
 	EnableLaunchEventPlayhead,
