@@ -174,8 +174,9 @@ Code from the card can crash the Deluge, so the failure cases are part of the fe
   for the very first time and is deleted once that call returns. If the Deluge never comes back, the next boot
   finds the canary, leaves that plugin alone, says so, and clears it - so the boot loop a bad blob would otherwise
   cause heals itself, and the boot after that tries the plugin again in case it was replaced.
-- **Safe boot**: holding SHIFT at power-on skips `PLUGINS/` entirely. The canary only covers a crash during the
-  load; this covers everything else, and needs no computer.
+- **Safe boot**: holding BACK at power-on skips `PLUGINS/` entirely. The canary only covers a crash during the
+  load; this covers everything else, and needs no computer. (Not SHIFT: the *bootloader* reads SHIFT at power-on
+  as "install the .bin on the card", so that gesture never reaches this firmware when a firmware file is there.)
 - **Fault attribution**: the loader registers each plugin's address range with the fault handler, so a fault
   inside plugin code is drawn on the pads in red (the handler used to discard the address entirely - it is not in
   the firmware's `.text`) and, once the Deluge has finished booting, the display names the plugin
@@ -193,7 +194,7 @@ with `abiVersion` bumped to 4 refused with the built-in kept, and macOS `._name.
 handling was tested with a blob whose render entry point was pointed at a deliberately undefined instruction:
 the fault screen drew the address inside the plugin in red, the canary survived to the next boot, that boot
 skipped the plugin and came up with `Plugin crashed, skipped: plaits_drums.dlp`, and the boot after it tried the
-plugin again. The SHIFT gesture is the one part the emulator cannot test - it ignores the firmware's
+plugin again. The BACK gesture is the one part the emulator cannot test - it ignores the firmware's
 "resend button states" request - so that needs a look on hardware.
 
 **Param-bank policy for loaded FX: fixed at boot.** A loaded FX gets its slots in `params::kNumFxPluginParams`

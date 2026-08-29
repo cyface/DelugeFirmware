@@ -98,8 +98,9 @@ const char* describe(PluginLoadStatus status);
 /// Scan PLUGINS/ and install what it finds. Call once at boot, after the card is readable and before anything has
 /// asked for a descriptor - no voice, FX chain or menu may exist yet.
 ///
-/// `safeBoot` skips the scan entirely (the user held SHIFT at power-on): the way back from a plugin that crashes
-/// the Deluge before there is any UI to turn it off with.
+/// `safeBoot` skips the scan entirely (the user held BACK at power-on): the way back from a plugin that crashes
+/// the Deluge before there is any UI to turn it off with. Not SHIFT - that is the bootloader's "install the .bin
+/// on the card" gesture and never reaches this firmware when a firmware file is present.
 void loadPluginsFromCard(bool safeBoot);
 
 /// What the scan did, in the order the files were read.

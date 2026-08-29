@@ -765,62 +765,64 @@ extern "C" int32_t deluge_main(void) {
 	// Check if the user is holding down the select knob to do a factory reset
 	bool readingFirmwareVersion = false;
 	bool otherButtonsOrEvents = false;
-	// SHIFT held at power-on means safe boot: skip the plugins on the card. The PIC re-sends the state of every
-	// held button just above, so a held SHIFT arrives here as an ordinary press message.
-	bool shiftHeldAtBoot = false;
+	// BACK held at power-on means safe boot: skip the plugins on the card. The PIC re-sends the state of every held
+	// button just above, so a held BACK arrives here as an ordinary press message. Not SHIFT: the *bootloader*
+	// takes SHIFT at power-on as "install the .bin on the card", so that gesture never reaches this firmware with
+	// a firmware file present, and asking for it would tell people to re-flash when they meant to skip a plugin.
+	bool backHeldAtBoot = false;
 	bool nextMessageIsARelease = false;
 
-	PIC::read(0x8000, [&readingFirmwareVersion, &otherButtonsOrEvents, &shiftHeldAtBoot,
-	                   &nextMessageIsARelease](auto response) {
-		if (readingFirmwareVersion) {
-			readingFirmwareVersion = false;
-			uint8_t value = util::to_underlying(response);
-			picFirmwareVersion = value & 127;
-			picSaysOLEDPresent = value & 128;
-			D_PRINTLN("PIC firmware version reported: %s", value);
-			return 0;
-		}
+	PIC::read(0x8000,
+	          [&readingFirmwareVersion, &otherButtonsOrEvents, &backHeldAtBoot, &nextMessageIsARelease](auto response) {
+		          if (readingFirmwareVersion) {
+			          readingFirmwareVersion = false;
+			          uint8_t value = util::to_underlying(response);
+			          picFirmwareVersion = value & 127;
+			          picSaysOLEDPresent = value & 128;
+			          D_PRINTLN("PIC firmware version reported: %s", value);
+			          return 0;
+		          }
 
-		using enum PIC::Response;
-		bool isARelease = nextMessageIsARelease;
-		nextMessageIsARelease = false;
-		switch (response) {
-		case FIRMWARE_VERSION_NEXT:
-			readingFirmwareVersion = true;
-			return 0;
+		          using enum PIC::Response;
+		          bool isARelease = nextMessageIsARelease;
+		          nextMessageIsARelease = false;
+		          switch (response) {
+		          case FIRMWARE_VERSION_NEXT:
+			          readingFirmwareVersion = true;
+			          return 0;
 
-		case NEXT_PAD_OFF:
-			// A release is coming; note it so a button held *down* can be told apart from one let go of. Still
-			// counts as an event, exactly as it did when this fell through to the default case below.
-			nextMessageIsARelease = true;
-			otherButtonsOrEvents = true;
-			return 0;
+		          case NEXT_PAD_OFF:
+			          // A release is coming; note it so a button held *down* can be told apart from one let go of.
+			          // Still counts as an event, exactly as it did when this fell through to the default case below.
+			          nextMessageIsARelease = true;
+			          otherButtonsOrEvents = true;
+			          return 0;
 
-		case RESET_SETTINGS:
-			if (!otherButtonsOrEvents) {
-				Deluge::factoryReset();
-			}
-			return 0;
+		          case RESET_SETTINGS:
+			          if (!otherButtonsOrEvents) {
+				          Deluge::factoryReset();
+			          }
+			          return 0;
 
-		case UNKNOWN_BREAK:
-			return 1;
+		          case UNKNOWN_BREAK:
+			          return 1;
 
-		case UNKNOWN_BOOT_RESPONSE: // value 129. Happens every boot. If you know what this is, please rename!
-			return 0;
+		          case UNKNOWN_BOOT_RESPONSE: // value 129. Happens every boot. If you know what this is, please rename!
+			          return 0;
 
-		default:
-			if (response >= UNKNOWN_OLED_RELATED_COMMAND && response <= SET_DC_HIGH) {
-				// OLED D/C low ack
-				return 0;
-			}
-			if (!isARelease && util::to_underlying(response) == deluge::hid::button::SHIFT) {
-				shiftHeldAtBoot = true;
-			}
-			// If any hint of another button being held, don't do anything.
-			otherButtonsOrEvents = true;
-			return 0;
-		}
-	});
+		          default:
+			          if (response >= UNKNOWN_OLED_RELATED_COMMAND && response <= SET_DC_HIGH) {
+				          // OLED D/C low ack
+				          return 0;
+			          }
+			          if (!isARelease && util::to_underlying(response) == deluge::hid::button::BACK) {
+				          backHeldAtBoot = true;
+			          }
+			          // If any hint of another button being held, don't do anything.
+			          otherButtonsOrEvents = true;
+			          return 0;
+		          }
+	          });
 
 	FlashStorage::readSettings();
 
@@ -855,7 +857,7 @@ extern "C" int32_t deluge_main(void) {
 	PadLEDs::setBrightnessLevel(FlashStorage::defaultPadBrightness);
 	// Before any song, voice or menu asks for a plugin descriptor: whatever PLUGINS/ holds replaces the built-in
 	// of the same name for the rest of this boot.
-	deluge::plugin::loadPluginsFromCard(shiftHeldAtBoot);
+	deluge::plugin::loadPluginsFromCard(backHeldAtBoot);
 	setupBlankSong(); // we always need to do this
 	addConditionalTask(setupStartupSong, 100, isCardReady, "load startup song", RESOURCE_SD | RESOURCE_SD_ROUTINE);
 
