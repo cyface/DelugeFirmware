@@ -342,15 +342,18 @@ void announce() {
 		appendText(noticeShort, sizeof(noticeShort), "SKIP");
 		appendText(noticeLong, sizeof(noticeLong), "Plugins skipped");
 	}
-	else if (problem != nullptr && problem->status == PluginLoadStatus::crashedBefore) {
-		appendText(noticeShort, sizeof(noticeShort), "CRSH");
-		appendText(noticeLong, sizeof(noticeLong), "Plugin crashed, skipped: ");
-		appendText(noticeLong, sizeof(noticeLong), problem->file);
-	}
 	else if (problem != nullptr) {
-		appendText(noticeShort, sizeof(noticeShort), "PLUG");
-		appendText(noticeLong, sizeof(noticeLong), "Plugin not loaded: ");
-		appendText(noticeLong, sizeof(noticeLong), problem->file);
+		char subject[sizeof(problem->file)];
+		describeSubject(*problem, subject, sizeof(subject));
+		if (problem->status == PluginLoadStatus::crashedBefore) {
+			appendText(noticeShort, sizeof(noticeShort), "CRSH");
+			appendText(noticeLong, sizeof(noticeLong), "Plugin crashed, skipped: ");
+		}
+		else {
+			appendText(noticeShort, sizeof(noticeShort), "PLUG");
+			appendText(noticeLong, sizeof(noticeLong), "Plugin not loaded: ");
+		}
+		appendText(noticeLong, sizeof(noticeLong), subject);
 	}
 	else if (loaded > 0) {
 		// A console line, no popup: worth confirming, not worth interrupting for.
@@ -443,6 +446,21 @@ const char* describe(PluginLoadStatus status) {
 		return "crashed";
 	}
 	return "?";
+}
+
+void describeSubject(const PluginLoadRecord& record, char* out, uint32_t size) {
+	if (record.name[0] != 0) {
+		copyName(out, size, record.name);
+		return;
+	}
+	copyName(out, size, record.file);
+	uint32_t length = 0;
+	while (out[length] != 0) {
+		length++;
+	}
+	if (length > 4 && strcasecmp(&out[length - 4], ".dlp") == 0) {
+		out[length - 4] = 0;
+	}
 }
 
 std::span<const PluginLoadRecord> pluginLoadReport() {

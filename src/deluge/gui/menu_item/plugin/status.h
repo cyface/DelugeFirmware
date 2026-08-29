@@ -39,15 +39,17 @@ public:
 			return;
 		}
 		int32_t yPixel = OLED_MAIN_TOPMOST_PIXEL + 15;
-		for (const deluge::plugin::PluginLoadRecord& record : report) {
-			if (yPixel + kTextSpacingY > OLED_MAIN_HEIGHT_PIXELS) {
-				break; // more files than the screen holds; the ones that failed sort no better, so just stop
-			}
+		// How many files fit, and whether the last line has to be spent saying that some did not: a list that
+		// silently stops is how someone ends up sure their plugin was never seen.
+		size_t lines = static_cast<size_t>((OLED_MAIN_HEIGHT_PIXELS - yPixel) / kTextSpacingY);
+		size_t shown = report.size() <= lines ? report.size() : (lines > 0 ? lines - 1 : 0);
+		for (const deluge::plugin::PluginLoadRecord& record : report.first(shown)) {
 			// Two columns rather than one run-on line: 128 pixels is about 21 characters, and "plaits_drums.dlp"
 			// alone is 16 of them. The status goes hard against the right edge - it is what you came to read -
 			// and the name gets whatever is left, clipped rather than pushing the status off the screen.
 			const char* status = deluge::plugin::describe(record.status);
-			const char* subject = record.name[0] != 0 ? record.name : record.file;
+			char subject[sizeof(record.file)];
+			deluge::plugin::describeSubject(record, subject, sizeof(subject));
 			int32_t statusWidth = canvas.getStringWidthInPixels(status, kTextSpacingY);
 			// Two characters of margin, not one: drawString's endX is where it stops *starting* characters, so a
 			// clipped name can still paint one character's width past it and touch the status.
@@ -55,6 +57,14 @@ public:
 			                  OLED_MAIN_WIDTH_PIXELS - statusWidth - 2 * kTextSpacingX);
 			canvas.drawStringAlignRight(status, yPixel, kTextSpacingX, kTextSpacingY);
 			yPixel += kTextSpacingY;
+		}
+		if (shown < report.size()) {
+			char more[24] = "and ";
+			char count[12];
+			intToString(static_cast<int32_t>(report.size() - shown), count, 1);
+			strncat(more, count, sizeof(more) - strlen(more) - 1);
+			strncat(more, " more", sizeof(more) - strlen(more) - 1);
+			canvas.drawString(more, kTextSpacingX, yPixel, kTextSpacingX, kTextSpacingY);
 		}
 	}
 
@@ -70,9 +80,7 @@ private:
 	/// "Drum loaded", or the file name when the file never got far enough to name a plugin. For the 7-segment
 	/// display, which scrolls the whole thing rather than laying it out in columns.
 	static void describeRecord(const deluge::plugin::PluginLoadRecord& record, char* out, size_t size) {
-		const char* subject = record.name[0] != 0 ? record.name : record.file;
-		out[0] = 0;
-		strncat(out, subject, size - 1);
+		deluge::plugin::describeSubject(record, out, size);
 		strncat(out, " ", size - strlen(out) - 1);
 		strncat(out, deluge::plugin::describe(record.status), size - strlen(out) - 1);
 	}
