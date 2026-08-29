@@ -43,9 +43,17 @@ public:
 			if (yPixel + kTextSpacingY > OLED_MAIN_HEIGHT_PIXELS) {
 				break; // more files than the screen holds; the ones that failed sort no better, so just stop
 			}
-			char line[64];
-			describeRecord(record, line, sizeof(line));
-			canvas.drawString(line, kTextSpacingX, yPixel, kTextSpacingX, kTextSpacingY, 0, OLED_MAIN_WIDTH_PIXELS);
+			// Two columns rather than one run-on line: 128 pixels is about 21 characters, and "plaits_drums.dlp"
+			// alone is 16 of them. The status goes hard against the right edge - it is what you came to read -
+			// and the name gets whatever is left, clipped rather than pushing the status off the screen.
+			const char* status = deluge::plugin::describe(record.status);
+			const char* subject = record.name[0] != 0 ? record.name : record.file;
+			int32_t statusWidth = canvas.getStringWidthInPixels(status, kTextSpacingY);
+			// Two characters of margin, not one: drawString's endX is where it stops *starting* characters, so a
+			// clipped name can still paint one character's width past it and touch the status.
+			canvas.drawString(subject, kTextSpacingX, yPixel, kTextSpacingX, kTextSpacingY, 0,
+			                  OLED_MAIN_WIDTH_PIXELS - statusWidth - 2 * kTextSpacingX);
+			canvas.drawStringAlignRight(status, yPixel, kTextSpacingX, kTextSpacingY);
 			yPixel += kTextSpacingY;
 		}
 	}
@@ -59,12 +67,13 @@ public:
 	}
 
 private:
-	/// "Drum: loaded", or the file name when the file never got far enough to name a plugin.
+	/// "Drum loaded", or the file name when the file never got far enough to name a plugin. For the 7-segment
+	/// display, which scrolls the whole thing rather than laying it out in columns.
 	static void describeRecord(const deluge::plugin::PluginLoadRecord& record, char* out, size_t size) {
 		const char* subject = record.name[0] != 0 ? record.name : record.file;
 		out[0] = 0;
 		strncat(out, subject, size - 1);
-		strncat(out, ": ", size - strlen(out) - 1);
+		strncat(out, " ", size - strlen(out) - 1);
 		strncat(out, deluge::plugin::describe(record.status), size - strlen(out) - 1);
 	}
 

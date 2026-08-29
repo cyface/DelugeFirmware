@@ -438,9 +438,9 @@ const char* describe(PluginLoadStatus status) {
 	case PluginLoadStatus::duplicate:
 		return "duplicate";
 	case PluginLoadStatus::skipped:
-		return "skipped: BACK";
+		return "safe boot";
 	case PluginLoadStatus::crashedBefore:
-		return "crashed: skipped";
+		return "crashed";
 	}
 	return "?";
 }
