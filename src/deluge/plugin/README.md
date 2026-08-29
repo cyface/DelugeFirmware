@@ -26,6 +26,7 @@ plugin/check_freestanding.sh   builds each kernel as a blob would be and fails o
 plugin/tools/pack_dlp.py       builds a kernel into a .dlp and verifies the file reads back as the descriptor it came from
 plugin/tools/dump_builtin_*    the built-in descriptors as JSON, so the packer has no second copy of the names
 plugin/tools/read_dlp.c        parses a .dlp with plugin_blob.h (the loader's own code) and prints what it binds
+plugin/tools/push_dlp.py       copies blobs onto a connected Deluge's card over USB MIDI, no card removal
 ```
 
 ## The param bank
@@ -117,6 +118,15 @@ Build one:
 src/deluge/plugin/tools/pack_dlp.py --all --out build/plugins        # every built-in
 src/deluge/plugin/tools/pack_dlp.py Tape --out /Volumes/DELUGE/PLUGINS/tape.dlp
 ```
+
+With the Deluge connected the card need not come out at all:
+
+```
+DBT_NO_SYNC=1 ./dbt exec 'python3 src/deluge/plugin/tools/push_dlp.py build/plugins/*.dlp'
+```
+
+which writes them into `PLUGINS/` over the firmware's sysex file protocol and reads each back to
+check it arrived intact. They are picked up by the next boot.
 
 The packer takes the plugin's names, tables and sizes from the *firmware's own* `builtin_*.h` descriptors
 (via `dump_builtin_descriptors`, where each entry-point symbol name is `static_assert`ed to be the function the
