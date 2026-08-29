@@ -95,6 +95,11 @@ inline constexpr uint32_t kMaxLoadedSourceModels = 16;
 /// What to call a status where a person will read it (the Settings > Plugins list).
 const char* describe(PluginLoadStatus status);
 
+/// What to call the plugin itself where a person will read it: its own name once the file got far enough to have
+/// one, otherwise the file name without its `.dlp`. The scan looks at nothing but .dlp files, so the extension is
+/// four characters of a 21-character display saying nothing - and four characters is a whole word here.
+void describeSubject(const PluginLoadRecord& record, char* out, uint32_t size);
+
 /// Scan PLUGINS/ and install what it finds. Call once at boot, after the card is readable and before anything has
 /// asked for a descriptor - no voice, FX chain or menu may exist yet.
 ///
