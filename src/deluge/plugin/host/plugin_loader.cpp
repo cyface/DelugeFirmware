@@ -89,7 +89,7 @@ void showLoadNotice() {
 
 /// Leave a canary on the card naming the plugin about to be called for the first time. If the Deluge never comes
 /// back from that call, the file is still there on the next boot and that plugin is left alone - so the boot loop
-/// a bad blob could otherwise cause heals itself, without the user having to know about the SHIFT gesture. Same
+/// a bad blob could otherwise cause heals itself, without the user having to know about the BACK gesture. Same
 /// idea as the startup-song canary in deluge.cpp.
 void writeCanary(const char* fileName) {
 	FIL file;
@@ -367,7 +367,7 @@ void announce() {
 void loadPluginsFromCard(bool safeBoot) {
 	numRecords = 0;
 	if (safeBoot) {
-		// SHIFT was held at power-on. Nothing is read, so a plugin that crashes the Deluge cannot keep it from
+		// BACK was held at power-on. Nothing is read, so a plugin that crashes the Deluge cannot keep it from
 		// booting - which is the only state in which the user has no other way out.
 		PluginLoadRecord& record = records[numRecords++];
 		record = PluginLoadRecord{};
@@ -438,7 +438,7 @@ const char* describe(PluginLoadStatus status) {
 	case PluginLoadStatus::duplicate:
 		return "duplicate";
 	case PluginLoadStatus::skipped:
-		return "skipped: SHIFT";
+		return "skipped: BACK";
 	case PluginLoadStatus::crashedBefore:
 		return "crashed: skipped";
 	}
