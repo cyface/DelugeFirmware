@@ -371,7 +371,7 @@ def do_flash(a, root: Path) -> None:
     say(f"DONE running {ver} (device identity {new_ver}).")
     say(
         "NOTE this was a RAM load: a power-cycle reverts to the SD-installed firmware. To keep it, copy this ONE "
-        ".bin to the SD card (replace the existing one, never stack several) and flash with Shift+Select on power-up."
+        ".bin to the SD card (replace the existing one, never stack several) and flash by powering on holding SHIFT."
     )
 
 

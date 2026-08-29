@@ -28,7 +28,8 @@ checks the key and CRC, and `chainload_from_buf()` jumps into it. **SPI flash is
 power-cycle reverts to whatever was last installed from the SD card.** Use it for the fast
 iterate loop; when a build is a keeper, the persistent path is still: copy this ONE `.bin` to the
 card (replace the existing one — only one `.bin` on the card, never stack), eject, power on holding
-Shift+Select. `loadfw` itself prints an advisory that behaviour can differ slightly from an SD flash
+SHIFT (the bootloader's gesture: it installs whatever `.bin` it finds; ~a minute, with its own
+progress screen). `loadfw` itself prints an advisory that behaviour can differ slightly from an SD flash
 — test via SD before opening a PR.
 
 ## One-time bootstrap (read this before the first use)
@@ -88,7 +89,7 @@ identity only carries major.minor.patch, so the *commit* comes from the bin, not
 ## Nice-to-haves not yet implemented
 
 - `--sd` persistent mode (locate `/Volumes/DELUGE`, replace the single `.bin`, eject, print the
-  Shift+Select steps). Beware: DelugEmu's SD image also mounts as `DELUGE`.
+  hold-SHIFT-on-power-up step). Beware: DelugEmu's SD image also mounts as `DELUGE`.
 - `--emulator` mode sending the same sysex to DelugEmu over its UDP MIDI chardev (same framing,
   command `03 01`/`03 02`).
 
