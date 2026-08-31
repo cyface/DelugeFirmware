@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!-- Web MIDI twin of hw_echo_stats.py: same ^echo probe, same output line format, so a browser run
+     diffs directly against an rtmidi run. Divergence between the two isolates the browser's own
+     MIDI layer (e.g. Chrome 152's MidiMacUmp sysex-framing regression, crbug 540020473, fixed in
+     153) from the OS-level CoreMIDI byte-750 deletion (fork issue #42), which both layers ride.
+     Open the file directly in Chrome (file:// is a secure context) or serve it from localhost,
+     with the Deluge connected and dev sysex enabled. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deluge ^echo — Web MIDI probe</title>
+<style>
+  body { font: 14px system-ui; margin: 2em; max-width: 60em; }
+  pre { background: #f4f4f4; padding: 1em; overflow-x: auto; }
+  button { font-size: 1em; padding: .4em 1em; }
+  input { font-size: 1em; width: 24em; }
+</style>
+</head>
+<body>
+<h1>Deluge <code>^echo</code> — Web MIDI probe</h1>
+<p>Sizes (encoded payload bytes, comma-separated):
+<input id="sizes" value="100, 727, 733, 734, 800, 1171">
+<button id="run">Run probe</button></p>
+<p>Compare against: <code>DBT_NO_SYNC=1 ./dbt exec 'python3 .claude/skills/deluge-flash/hw_echo_stats.py &lt;same sizes&gt;'</code></p>
+<pre id="out">Idle. Chrome asks for MIDI + sysex permission on the first run.</pre>
+<script>
+"use strict";
+const HEADER = [0xF0, 0x00, 0x21, 0x7B, 0x01];
+const out = document.getElementById("out");
+const log = (line) => { out.textContent += line + "\n"; };
+
+function buildProbe(enc, seq) {
+  const json = Array.from('{"echo":{}}', (c) => c.charCodeAt(0));
+  const payload = Array.from({ length: enc }, (_, i) => i & 0x7F);
+  return new Uint8Array([...HEADER, 0x04, seq, ...json, 0x00, ...payload, 0xF7]);
+}
+
+function probeOnce(input, output, enc, seq) {
+  const msg = buildProbe(enc, seq);
+  const sentEvents = Math.floor((msg.length + 2) / 3);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { input.onmidimessage = null; resolve(null); }, 4000);
+    input.onmidimessage = (e) => {
+      const d = e.data;
+      // Reply: same header, command 0x05, our seq, JSON body, F7.
+      if (d.length < 9 || d[5] !== 0x05 || d[6] !== seq) return;
+      if (!HEADER.every((b, i) => d[i] === b)) return;
+      clearTimeout(timer);
+      input.onmidimessage = null;
+      const body = String.fromCharCode(...d.slice(7, d.length - 1));
+      resolve({ reply: JSON.parse(body)["^echo"], msgLen: msg.length, sentEvents });
+    };
+    output.send(msg);
+  }).then((r) => {
+    if (!r) return `frame ${String(msg.length).padStart(4)}B: NO REPLY`;
+    const g = r.reply;
+    const short = (r.msgLen - 5) - g.frameLen;
+    return `frame ${String(r.msgLen).padStart(4)}B (host built ${r.sentEvents} evts): ` +
+      `rx evts=${g.usbEvts} lastCIN=0x${g.usbLastCIN.toString(16).toUpperCase()} rxLen=${g.usbRxLen} ` +
+      `short_by=${short} div=${g.rampDivergesAt} bails=${g.usbBails}`;
+  });
+}
+
+document.getElementById("run").onclick = async () => {
+  out.textContent = "";
+  log(navigator.userAgent);
+  let access;
+  try {
+    access = await navigator.requestMIDIAccess({ sysex: true });
+  }
+  catch (err) {
+    log(`MIDI access refused: ${err}. Serve from localhost if file:// was blocked.`);
+    return;
+  }
+  // The last Deluge port is the sysex one — same choice the Python tools make.
+  const outs = [...access.outputs.values()].filter((p) => p.name.toUpperCase().includes("DELUGE"));
+  const ins = [...access.inputs.values()].filter((p) => p.name.toUpperCase().includes("DELUGE"));
+  if (!outs.length || !ins.length) { log("no Deluge MIDI port"); return; }
+  const output = outs[outs.length - 1];
+  const input = ins[ins.length - 1];
+  await input.open();
+  await output.open();
+  log(`port: ${output.name}`);
+  const sizes = document.getElementById("sizes").value.split(",")
+    .map((s) => parseInt(s.trim(), 10)).filter((n) => n > 0);
+  let seq = 1;
+  for (const enc of sizes) {
+    log(await probeOnce(input, output, enc, seq));
+    seq = (seq + 1) & 0x7F || 1;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  log("done.");
+};
+</script>
+</body>
+</html>
