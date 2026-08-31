@@ -36,12 +36,15 @@ import rtmidi
 
 HEADER = [0xF0, 0x00, 0x21, 0x7B, 0x01]
 JSON_COMMAND, JSON_REPLY = 0x04, 0x05
-# The firmware assembles an incoming sysex into MIDICable::incomingSysexBuffer, which since the
-# fix/smsysex-bigger-frames branch is 1280 bytes - enough for a full 1024-byte block: header +
-# JSON + the block 7-bit packed (8 bytes per 7) + F7 is a ~1220-byte frame. Firmware older than
-# that silently drops frames over 1024 bytes (this shows up as a reply timeout, not an error);
-# drop BLOCK back to 512 if pushing to one.
-BLOCK = 1024
+# Two ceilings apply (fork issue #42, measured on hardware 2026-08-31):
+# - macOS (CoreMIDI/AppleUSBMIDIDriver, which rtmidi uses) silently deletes byte 750 of any
+#   outgoing sysex longer than 752 bytes, so a request frame must stay <= 752 bytes: with this
+#   tool's JSON overhead that caps the data block at ~609 bytes. 600 leaves margin.
+# - The firmware's frame reassembly buffer: 1280 bytes since fix/smsysex-bigger-frames (enough
+#   for a 1024-byte block), 1024 before that (oversized frames vanish -> reply timeout).
+# On a non-macOS host with current firmware, BLOCK can be raised toward 1024. Chunk size barely
+# moves throughput anyway - the serial ~10 ms round trip dominates.
+BLOCK = 600
 
 
 def pack(data: bytes) -> bytes:
