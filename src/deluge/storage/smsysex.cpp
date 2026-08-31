@@ -33,6 +33,12 @@
 extern "C" {
 extern uint8_t currentlyAccessingCard;
 }
+
+// Last-frame USB SysEx receive stats from midi_engine.cpp, surfaced in the ^echo reply.
+extern uint32_t lastSysexRxEvents;
+extern uint32_t lastSysexRxLastCIN;
+extern uint32_t lastSysexRxLen;
+extern uint32_t sysexRxOverflowBails;
 DIR sxDIR;
 uint32_t dirOffsetCounter;
 
@@ -931,6 +937,10 @@ void smSysex::doEcho(MIDICable& cable, JsonDeserializer& reader, int32_t frameLe
 	jWriter.writeAttribute("encoded", encodedSize);
 	jWriter.writeAttributeHex("crc", crc, 8);
 	jWriter.writeAttribute("rampDivergesAt", divergesAt);
+	jWriter.writeAttribute("usbEvts", lastSysexRxEvents);
+	jWriter.writeAttribute("usbLastCIN", lastSysexRxLastCIN);
+	jWriter.writeAttribute("usbRxLen", lastSysexRxLen);
+	jWriter.writeAttribute("usbBails", sysexRxOverflowBails);
 	jWriter.closeTag(true);
 	sendMsg(cable, jWriter);
 }
