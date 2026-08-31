@@ -719,6 +719,15 @@ void MidiEngine::setupUSBHostReceiveTransfer(int32_t ip, int32_t midiDeviceNum) 
 
 uint8_t usbCurrentlyInitialized = false;
 
+// USB receive stats for the last completed inbound SysEx frame, reported by smSysex's ^echo op so
+// a host can tell whether a short frame was already short on the wire (terminator CIN carries
+// fewer bytes) or lost bytes inside this reassembly (fork issue #42).
+uint32_t lastSysexRxEvents = 0;
+uint32_t lastSysexRxLastCIN = 0;
+uint32_t lastSysexRxLen = 0;
+uint32_t sysexRxOverflowBails = 0;
+static uint32_t sysexRxEventCounter = 0;
+
 void MidiEngine::checkIncomingUsbSysex(uint8_t const* msg, int32_t ip, int32_t d, int32_t cableIdx) {
 	ConnectedUSBMIDIDevice* connected = &connectedUSBMIDIDevices[ip][d];
 	if (cableIdx > connectedUSBMIDIDevices[ip][d].maxPortConnected) {
@@ -734,6 +743,7 @@ void MidiEngine::checkIncomingUsbSysex(uint8_t const* msg, int32_t ip, int32_t d
 		// sysex start or continue
 		if (msg[1] == 0xf0) {
 			cable.incomingSysexPos = 0;
+			sysexRxEventCounter = 0;
 		}
 		to_read = 3;
 	}
@@ -742,16 +752,24 @@ void MidiEngine::checkIncomingUsbSysex(uint8_t const* msg, int32_t ip, int32_t d
 		will_end = true;
 	}
 
+	if (to_read) {
+		sysexRxEventCounter++;
+	}
+
 	for (int32_t i = 0; i < to_read; i++) {
 		if (cable.incomingSysexPos >= sizeof(cable.incomingSysexBuffer)) {
 			// TODO: allocate a GMA buffer to some bigger size
 			cable.incomingSysexPos = 0;
+			sysexRxOverflowBails++;
 			return; // bail out
 		}
 		cable.incomingSysexBuffer[cable.incomingSysexPos++] = msg[i + 1];
 	}
 
 	if (will_end) {
+		lastSysexRxEvents = sysexRxEventCounter;
+		lastSysexRxLastCIN = statusType;
+		lastSysexRxLen = cable.incomingSysexPos;
 		if (cable.incomingSysexBuffer[0] == 0xf0) {
 			midiSysexReceived(cable, cable.incomingSysexBuffer, cable.incomingSysexPos);
 		}
