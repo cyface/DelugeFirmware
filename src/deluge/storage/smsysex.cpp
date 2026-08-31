@@ -32,9 +32,8 @@ const size_t blockBufferMax = 1024;
 const size_t sysexBufferMax = blockBufferMax + 256;
 uint8_t* writeBlockBuffer = nullptr;
 uint8_t* readBlockBuffer = nullptr;
-// Advertised in the ^session grant as "pipe": the most concurrent requests for which the USB send
-// ring guarantees whole-reply-or-timeout. A full-block ^read reply spans ~410 of the ring's 1024
-// events, so two replies fit but a third can overflow (dropped whole, which the client retries).
+// Advertised as "pipe" in the ^session grant: max concurrent requests whose replies fit in the USB
+// send ring (a full-block ^read reply spans ~410 of its 1024 events).
 const uint32_t kMaxPipelinedRequests = 2;
 const uint32_t MAX_OPEN_FILES = 4;
 

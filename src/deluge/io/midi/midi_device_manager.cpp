@@ -680,8 +680,7 @@ void ConnectedUSBMIDIDevice::bufferMessage(uint32_t fullMessage) {
 		}
 		queued = ringBufWriteIdx - ringBufReadIdx;
 	}
-	// At queued == MIDI_SEND_BUFFER_LEN_RING the ring is exactly full: one more write would land on
-	// the slot ringBufReadIdx is about to send and corrupt an earlier message.
+	// At queued == MIDI_SEND_BUFFER_LEN_RING the ring is full; writing would corrupt the oldest unsent event.
 	if (queued >= MIDI_SEND_BUFFER_LEN_RING) {
 		D_PRINTLN("MIDI send ring overflow, dropping event");
 		return;
