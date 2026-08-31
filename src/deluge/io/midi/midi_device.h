@@ -158,7 +158,9 @@ public:
 	bool receiveClock; // whether to receive clocks from this device
 	bool is_relative;  // whether this device receive's relative cc's (used with midi takeover)
 	bool midi_thru;    // whether this device should have its input sent to the output (used with midi thru)
-	uint8_t incomingSysexBuffer[1024];
+	// Must hold a full smSysex frame: header + JSON + a blockBufferMax (1024) data block
+	// 7-bit packed (8 bytes per 7) + F7. Checked against sysexBufferMax in smsysex.cpp.
+	uint8_t incomingSysexBuffer[1280];
 	int32_t incomingSysexPos = 0;
 
 protected:
