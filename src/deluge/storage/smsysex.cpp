@@ -30,6 +30,9 @@ JsonSerializer jWriter;
 String activeDirName;
 const size_t blockBufferMax = 1024;
 const size_t sysexBufferMax = blockBufferMax + 256;
+// A whole frame carrying a blockBufferMax data block must survive reassembly in the cable's buffer.
+static_assert(sizeof(MIDICable::incomingSysexBuffer) >= sysexBufferMax,
+              "incomingSysexBuffer too small for a full smSysex block");
 uint8_t* writeBlockBuffer = nullptr;
 uint8_t* readBlockBuffer = nullptr;
 const uint32_t MAX_OPEN_FILES = 4;
@@ -755,6 +758,57 @@ void smSysex::doPing(MIDICable& cable, JsonDeserializer& reader) {
 	sendMsg(cable, jWriter);
 }
 
+static uint32_t crc32Sysex(const uint8_t* data, uint32_t len) {
+	uint32_t crc = 0xFFFFFFFF;
+	for (uint32_t i = 0; i < len; ++i) {
+		crc ^= data[i];
+		for (int b = 0; b < 8; ++b) {
+			crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+		}
+	}
+	return ~crc;
+}
+
+// Transport diagnostic: reports what the device actually received, without touching the card.
+// Reply carries the queued frame length, the encoded payload size as decodeDataFromReader would
+// see it, a CRC32 over those payload bytes, and - if the host sent the self-describing ramp
+// payload (byte i == i & 0x7F) - the first index where the received bytes departed from it.
+void smSysex::doEcho(MIDICable& cable, JsonDeserializer& reader, int32_t frameLen) {
+	char const* tagName;
+	reader.match('{');
+	while (*(tagName = reader.readNextTagOrAttributeName())) {
+		reader.exitTag();
+	}
+	reader.match('}');
+	reader.match('}'); // skip box too.
+
+	int32_t encodedSize = -1;
+	uint32_t crc = 0;
+	int32_t divergesAt = -1;
+	char aChar;
+	if (reader.peekChar(&aChar) && aChar == 0) {
+		reader.readChar(&aChar);                           // skip the separator
+		encodedSize = reader.bytesRemainingInBuffer() - 1; // don't count that 0xF7.
+		const uint8_t* payload = (const uint8_t*)reader.GetCurrentAddressInBuffer();
+		crc = crc32Sysex(payload, encodedSize);
+		for (int32_t i = 0; i < encodedSize; ++i) {
+			if (payload[i] != (i & 0x7F)) {
+				divergesAt = i;
+				break;
+			}
+		}
+	}
+
+	startReply(jWriter, reader);
+	jWriter.writeOpeningTag("^echo", false, true);
+	jWriter.writeAttribute("frameLen", frameLen);
+	jWriter.writeAttribute("encoded", encodedSize);
+	jWriter.writeAttributeHex("crc", crc, 8);
+	jWriter.writeAttribute("rampDivergesAt", divergesAt);
+	jWriter.closeTag(true);
+	sendMsg(cable, jWriter);
+}
+
 uint32_t smSysex::decodeDataFromReader(JsonDeserializer& reader, uint8_t* dest, uint32_t destMax) {
 	char zip = 0;
 	if (!reader.readChar(&zip) || zip) // skip separator, fail if not there.
@@ -765,7 +819,7 @@ uint32_t smSysex::decodeDataFromReader(JsonDeserializer& reader, uint8_t* dest, 
 }
 
 void smSysex::sysexReceived(MIDICable& cable, uint8_t* data, int32_t len) {
-	if (len < 3) {
+	if (len < 3 || len > (int32_t)sysexBufferMax) {
 		return;
 	}
 
@@ -840,6 +894,10 @@ void smSysex::handleNextSysEx() {
 		}
 		else if (!strcmp(tagName, "ping")) {
 			doPing(de.cable, parser);
+			goto done;
+		}
+		else if (!strcmp(tagName, "echo")) {
+			doEcho(de.cable, parser, de.len);
 			goto done;
 		}
 		parser.exitTag();
