@@ -21,6 +21,7 @@
 #include "gui/menu_item/mpe/zone_num_member_channels.h"
 #include "gui/ui/sound_editor.h"
 #include "hid/display/display.h"
+#include "io/debug/log.h"
 #include "io/midi/cable_types/din.h"
 #include "io/midi/cable_types/usb_device_cable.h"
 #include "io/midi/device_specific/specific_midi_device.h"
@@ -679,8 +680,10 @@ void ConnectedUSBMIDIDevice::bufferMessage(uint32_t fullMessage) {
 		}
 		queued = ringBufWriteIdx - ringBufReadIdx;
 	}
-	if (queued > MIDI_SEND_BUFFER_LEN_RING) {
-		// TODO: show some error message
+	// At queued == MIDI_SEND_BUFFER_LEN_RING the ring is exactly full: one more write would land on
+	// the slot ringBufReadIdx is about to send and corrupt an earlier message.
+	if (queued >= MIDI_SEND_BUFFER_LEN_RING) {
+		D_PRINTLN("MIDI send ring overflow, dropping event");
 		return;
 	}
 
@@ -750,7 +753,7 @@ ConnectedUSBMIDIDevice::ConnectedUSBMIDIDevice() {
 	memset(receiveData, 0, sizeof(receiveData));
 	memset(dataSendingNow, 0, MIDI_SEND_BUFFER_LEN_INNER * 4);
 	numBytesSendingNow = 0;
-	memset(sendDataRingBuf, 0, MIDI_SEND_BUFFER_LEN_RING);
+	memset(sendDataRingBuf, 0, sizeof(sendDataRingBuf));
 	ringBufWriteIdx = 0;
 	ringBufReadIdx = 0;
 

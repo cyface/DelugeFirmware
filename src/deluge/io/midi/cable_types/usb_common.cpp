@@ -16,7 +16,10 @@
  */
 
 #include "usb_common.h"
+#include "io/debug/log.h"
 #include "io/midi/midi_engine.h"
+
+extern uint8_t anyUSBSendingStillHappening[];
 
 void MIDICableUSB::connectedNow(int32_t midiDeviceNum) {
 	connectionFlags |= (1 << midiDeviceNum);
@@ -93,6 +96,21 @@ void MIDICableUSB::sendSysex(const uint8_t* data, int32_t len) {
 
 	if (!connectedDevice) {
 		return;
+	}
+
+	// The ring drops individual events on overflow, which would silently excise 3-byte chunks from
+	// the middle of the message while leaving it well-framed - the receiver gets a complete-looking
+	// but wrong SysEx. Reserve room for the whole message up front (one buffered event per 3 bytes,
+	// plus one for the 0x7D reply header below) and drop it entirely if it can't fit.
+	int32_t eventsNeeded = (len + 2) / 3 + 1;
+	if (connectedDevice->sendBufferSpace() < eventsNeeded * 3) {
+		if (!anyUSBSendingStillHappening[0]) {
+			midiEngine.flushUSBMIDIOutput();
+		}
+		if (connectedDevice->sendBufferSpace() < eventsNeeded * 3) {
+			D_PRINTLN("sendSysex: send ring full, dropping %d byte message", len);
+			return;
+		}
 	}
 
 	int32_t pos = 0;
