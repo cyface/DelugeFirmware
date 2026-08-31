@@ -1,12 +1,12 @@
 ---
 name: deluge-sd-backup
-description: Backup the physical Deluge SD card to ~/Documents/Deluge/TimCardBU (rsync mirror of the card root, additive by default), refusing DelugEmu's look-alike disk image
+description: Backup the physical Deluge SD card to ~/Documents/Music/Deluge/TimCardBU (rsync mirror of the card root, additive by default), refusing DelugEmu's look-alike disk image
 allowed-tools: Bash, Read
 ---
 
 # deluge-sd-backup
 
-Copies the mounted Deluge SD card into `~/Documents/Deluge/TimCardBU` as a flat mirror of the
+Copies the mounted Deluge SD card into `~/Documents/Music/Deluge/TimCardBU` as a flat mirror of the
 card root (the existing layout in that directory). Everything lives in
 `.claude/skills/deluge-sd-backup/deluge_sd_backup.sh`:
 

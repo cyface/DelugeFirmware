@@ -1,9 +1,9 @@
 #!/bin/bash
-# Backup the Deluge SD card to ~/Documents/Deluge/TimCardBU.
+# Backup the Deluge SD card to ~/Documents/Music/Deluge/TimCardBU.
 # Default is additive (never deletes from the backup); --mirror makes it exact.
 set -euo pipefail
 
-DEST="$HOME/Documents/Deluge/TimCardBU"
+DEST="$HOME/Documents/Music/Deluge/TimCardBU"
 SRC=""
 MIRROR=0
 DRYRUN=0
