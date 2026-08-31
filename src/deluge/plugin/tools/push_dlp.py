@@ -36,10 +36,12 @@ import rtmidi
 
 HEADER = [0xF0, 0x00, 0x21, 0x7B, 0x01]
 JSON_COMMAND, JSON_REPLY = 0x04, 0x05
-# The firmware assembles an incoming sysex into MIDIDevice::incomingSysexBuffer[1024], so a whole
-# message has to fit in 1024 bytes: header + JSON + the block 7-bit packed (8 bytes per 7) + F7.
-# 512 bytes of file data comes to ~640, which is what `dbt loadfw` streams too.
-BLOCK = 512
+# The firmware assembles an incoming sysex into MIDICable::incomingSysexBuffer, which since the
+# fix/smsysex-bigger-frames branch is 1280 bytes - enough for a full 1024-byte block: header +
+# JSON + the block 7-bit packed (8 bytes per 7) + F7 is a ~1220-byte frame. Firmware older than
+# that silently drops frames over 1024 bytes (this shows up as a reply timeout, not an error);
+# drop BLOCK back to 512 if pushing to one.
+BLOCK = 1024
 
 
 def pack(data: bytes) -> bytes:
