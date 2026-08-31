@@ -51,6 +51,10 @@ static_assert(sizeof(MIDICable::incomingSysexBuffer) >= sysexBufferMax,
               "incomingSysexBuffer too small for a full smSysex block");
 uint8_t* writeBlockBuffer = nullptr;
 uint8_t* readBlockBuffer = nullptr;
+// Advertised in the ^session grant as "pipe": the most concurrent requests for which the USB send
+// ring guarantees whole-reply-or-timeout. A full-block ^read reply spans ~410 of the ring's 1024
+// events, so two replies fit but a third can overflow (dropped whole, which the client retries).
+const uint32_t kMaxPipelinedRequests = 2;
 const uint32_t MAX_OPEN_FILES = 4;
 
 struct FILdata {
@@ -879,6 +883,7 @@ void smSysex::assignSession(MIDICable& cable, JsonDeserializer& reader) {
 	jWriter.writeAttribute("midBase", sessionNum << SYSEX_SESSION_SHIFT);
 	jWriter.writeAttribute("midMin", (sessionNum << SYSEX_SESSION_SHIFT) + 1);
 	jWriter.writeAttribute("midMax", (sessionNum << SYSEX_SESSION_SHIFT) + SYSEX_MSGID_MAX);
+	jWriter.writeAttribute("pipe", kMaxPipelinedRequests);
 	jWriter.closeTag(true);
 	sendMsg(cable, jWriter);
 }
