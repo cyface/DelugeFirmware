@@ -78,8 +78,7 @@ class Suite:
 
     def s02_routing(self):
         e = self.emu
-        e.note_on(60)
-        sounded = self.wait_voices(lambda v: v >= 1, timeout=6)
+        sounded = self.sound_note(60)
         e.note_off(60)
         silent = self.wait_voices(lambda v: v == 0, timeout=10)
         p = e.probe()
