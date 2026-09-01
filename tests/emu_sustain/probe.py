@@ -69,6 +69,15 @@ out["voices"] = total
 out["voicesPerSound"] = per
 out["notes"] = notes
 
+# The learnable SUSTAIN command binding (channelOrZone, noteOrCC).
+try:
+    sc = gdb.parse_and_eval(
+        "midiEngine.globalMIDICommands[(int)GlobalMIDICommand::SUSTAIN]"
+    )
+    out["sustainCmd"] = [int(sc["channelOrZone"]), int(sc["noteOrCC"])]
+except gdb.error:
+    out["sustainCmd"] = None
+
 # MIDI follow channel A (sanity that our routing config loaded).
 try:
     mf = gdb.parse_and_eval("midiEngine.midiFollowChannelType[0].channelOrZone")

@@ -595,6 +595,7 @@ enum class GlobalMIDICommand {
 	TRANSPOSE,
 	NEXT_SONG,
 	SHIFT,
+	SUSTAIN,
 	LAST, // Keep as boundary
 };
 constexpr auto kNumGlobalMIDICommands = util::to_underlying(GlobalMIDICommand::LAST) + 1;
@@ -938,6 +939,10 @@ constexpr int32_t MIDI_CHANNEL_MPE_LOWER_ZONE = 16;
 constexpr int32_t MIDI_CHANNEL_MPE_UPPER_ZONE = 17;
 constexpr int32_t NUM_CHANNELS = 18;
 constexpr int32_t MIDI_CHANNEL_NONE = 255;
+// "Any channel of any cable" - currently only used by the SUSTAIN global MIDI command's
+// factory-default binding (CC64 everywhere). Not learnable; learning always binds a
+// specific cable+channel.
+constexpr int32_t MIDI_CHANNEL_ANY = 253;
 constexpr int32_t MIDI_NOTE_NONE = 255;
 constexpr int32_t MIDI_CC_NONE = 255;
 

@@ -53,7 +53,12 @@ void Command::drawPixelsForOled() {
 		yPixel += kTextSpacingY;
 
 		char const* channelText;
-		if (command->channelOrZone == MIDI_CHANNEL_MPE_LOWER_ZONE) {
+		if (command->channelOrZone == MIDI_CHANNEL_ANY) {
+			// Currently only the SUSTAIN command's factory default (CC64 anywhere).
+			channelText = l10n::get(l10n::String::STRING_FOR_CHANNEL);
+			image.drawString("Any", kTextSpacingX * 8, yPixel, kTextSpacingX, kTextSizeYUpdated);
+		}
+		else if (command->channelOrZone == MIDI_CHANNEL_MPE_LOWER_ZONE) {
 			channelText = l10n::get(l10n::String::STRING_FOR_MPE_LOWER_ZONE);
 		}
 		else if (command->channelOrZone == MIDI_CHANNEL_MPE_UPPER_ZONE) {
@@ -75,7 +80,10 @@ void Command::drawPixelsForOled() {
 		image.drawString(channelText, 0, yPixel, kTextSpacingX, kTextSizeYUpdated);
 
 		yPixel += kTextSpacingY;
-		if (command->channelOrZone < IS_A_CC) {
+		if (command->channelOrZone == MIDI_CHANNEL_ANY) {
+			image.drawString("CC", 0, yPixel, kTextSpacingX, kTextSizeYUpdated);
+		}
+		else if (command->channelOrZone < IS_A_CC) {
 			image.drawString("Note", 0, yPixel, kTextSpacingX, kTextSizeYUpdated);
 		}
 		else if (command->channelOrZone < IS_A_PC) {

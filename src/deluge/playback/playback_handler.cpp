@@ -2882,6 +2882,12 @@ bool PlaybackHandler::tryGlobalMIDICommands(MIDICable& cable, int32_t channel, i
 				indicator_leds::setLedState(indicator_leds::LED::SHIFT, Buttons::isShiftButtonPressed());
 				break;
 
+			case GlobalMIDICommand::SUSTAIN:
+				// Not a momentary command: handled with pedal (value-threshold) semantics in
+				// midiCCReceived(), and deliberately not consumed here so the CC still reaches
+				// MIDI-follow, learned params and automation recording.
+				continue;
+
 			// case GlobalMIDICommand::TAP:
 			default:
 				if (getCurrentUI() == getRootUI()) {
@@ -3262,21 +3268,28 @@ void PlaybackHandler::midiCCReceived(MIDICable& cable, uint8_t channel, uint8_t 
 		}
 	}
 
-	// Sustain (damper) pedal: MIDI CC 64. Standard convention is value >= 64 means pressed.
-	// Handled here (after MIDI-learn, which is dealt with above) so a real pedal just works, while
-	// users can still learn CC64 to something else in MIDI-learn mode if they prefer.
-	if (!isMPE && ccNumber == 64 && channel < 16) {
-		bool pedalDown = (value >= 64);
-		MIDIInputChannel& inputChannel = cable.inputChannels[channel];
-		if (!pedalDown && inputChannel.sustainPedalDown) {
-			// Clear the flag *before* replaying note-offs so they aren't immediately re-held.
-			inputChannel.sustainPedalDown = false;
-			releaseSustainedNotesForChannel(cable, channel, doingMidiThru);
+	// Sustain (damper) pedal. Bound via the learnable SUSTAIN command in
+	// SETTINGS > MIDI > COMMANDS; the factory default is CC64 on any channel of any cable
+	// (MIDI_CHANNEL_ANY), matching the standard damper-pedal convention (value >= 64 = pressed).
+	// Relearn or unlearn the command to free CC64 up for other uses. Deliberately does NOT
+	// consume the message: it still falls through to MIDI-follow / learned params / automation
+	// recording below, so a CC mapped there keeps working (and recording) alongside the pedal.
+	if (!isMPE && channel < 16) {
+		LearnedMIDI& sustainCommand = midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)];
+		if (sustainCommand.containsSomething() && ccNumber == sustainCommand.noteOrCC
+		    && (sustainCommand.channelOrZone == MIDI_CHANNEL_ANY
+		        || sustainCommand.equalsChannelOrZone(&cable, channel + IS_A_CC))) {
+			bool pedalDown = (value >= 64);
+			MIDIInputChannel& inputChannel = cable.inputChannels[channel];
+			if (!pedalDown && inputChannel.sustainPedalDown) {
+				// Clear the flag *before* replaying note-offs so they aren't immediately re-held.
+				inputChannel.sustainPedalDown = false;
+				releaseSustainedNotesForChannel(cable, channel, doingMidiThru);
+			}
+			else {
+				inputChannel.sustainPedalDown = pedalDown;
+			}
 		}
-		else {
-			inputChannel.sustainPedalDown = pedalDown;
-		}
-		return;
 	}
 
 	char modelStackMemory[MODEL_STACK_MAX_SIZE];

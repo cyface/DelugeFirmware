@@ -1112,13 +1112,14 @@ midi::Command fillMidiCommand{STRING_FOR_FILL, GlobalMIDICommand::FILL};
 midi::Command transposeMidiCommand{STRING_FOR_TRANSPOSE, GlobalMIDICommand::TRANSPOSE};
 midi::Command nextSongMidiCommand{STRING_FOR_SONG_LOAD_NEXT, GlobalMIDICommand::NEXT_SONG};
 midi::Command shiftMidiCommand{STRING_FOR_SHIFT, GlobalMIDICommand::SHIFT};
+midi::Command sustainMidiCommand{STRING_FOR_SUSTAIN, GlobalMIDICommand::SUSTAIN};
 
 Submenu midiCommandsMenu{
     STRING_FOR_COMMANDS,
     STRING_FOR_MIDI_COMMANDS,
     {&playMidiCommand, &playbackRestartMidiCommand, &recordMidiCommand, &tapMidiCommand, &undoMidiCommand,
      &redoMidiCommand, &loopMidiCommand, &loopContinuousLayeringMidiCommand, &fillMidiCommand, &transposeMidiCommand,
-     &nextSongMidiCommand, &shiftMidiCommand},
+     &nextSongMidiCommand, &shiftMidiCommand, &sustainMidiCommand},
 };
 
 // MIDI device submenu - for after we've selected which device we want it for

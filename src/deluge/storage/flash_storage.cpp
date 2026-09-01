@@ -288,6 +288,10 @@ void resetSettings() {
 		globalMIDICommand.clear();
 	}
 
+	// Factory default for the SUSTAIN command: damper pedal on CC64, any channel of any cable.
+	midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].channelOrZone = MIDI_CHANNEL_ANY;
+	midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].noteOrCC = 64;
+
 	AudioEngine::inputMonitoringMode = InputMonitoringMode::SMART;
 	recordQuantizeLevel = 8;
 
@@ -493,6 +497,25 @@ void readSettings() {
 	/* buffer[193]  \
 	   buffer[194]   device reference above occupies 4 bytes
 	   buffer[195] */
+
+	// SUSTAIN command. Byte 196 is 0 on flash saved before this command existed - apply the
+	// CC64-anywhere factory default; 255 means explicitly unassigned; anything else is
+	// channelOrZone + 1 as for the other commands.
+	if (buffer[196] == 0) {
+		midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].channelOrZone = MIDI_CHANNEL_ANY;
+		midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].noteOrCC = 64;
+	}
+	else if (buffer[196] == 255) {
+		midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].clear();
+	}
+	else {
+		midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].channelOrZone = buffer[196] - 1;
+		midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].noteOrCC = buffer[197] - 1;
+		MIDIDeviceManager::readDeviceReferenceFromFlash(GlobalMIDICommand::SUSTAIN, &buffer[198]);
+		/* buffer[199]  \
+		   buffer[200]   device reference above occupies 4 bytes
+		   buffer[201] */
+	}
 
 	if (buffer[50] >= kNumInputMonitoringModes) {
 		AudioEngine::inputMonitoringMode = InputMonitoringMode::SMART;
@@ -860,6 +883,18 @@ void writeSettings() {
 	buffer[190] = midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SHIFT)].channelOrZone + 1;
 	buffer[191] = midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SHIFT)].noteOrCC + 1;
 
+	// SUSTAIN command: write 255 for explicitly-unassigned. 0 is reserved to mean "flash
+	// predates this command" (which re-applies the CC64 factory default on read), and
+	// MIDI_CHANNEL_NONE + 1 would wrap to exactly that.
+	if (midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].channelOrZone
+	    == MIDI_CHANNEL_NONE) {
+		buffer[196] = 255;
+	}
+	else {
+		buffer[196] = midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].channelOrZone + 1;
+	}
+	buffer[197] = midiEngine.globalMIDICommands[util::to_underlying(GlobalMIDICommand::SUSTAIN)].noteOrCC + 1;
+
 	/* Global MIDI command device references - these occupy 4 bytes each */
 	MIDIDeviceManager::writeDeviceReferenceToFlash(GlobalMIDICommand::PLAYBACK_RESTART, &buffer[80]);
 	/* buffer[81]  \
@@ -905,6 +940,10 @@ void writeSettings() {
 	/* buffer[193]  \
 	   buffer[194]   device reference above occupies 4 bytes
 	   buffer[195] */
+	MIDIDeviceManager::writeDeviceReferenceToFlash(GlobalMIDICommand::SUSTAIN, &buffer[198]);
+	/* buffer[199]  \
+	   buffer[200]   device reference above occupies 4 bytes
+	   buffer[201] */
 
 	buffer[50] = util::to_underlying(AudioEngine::inputMonitoringMode);
 

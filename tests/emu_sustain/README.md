@@ -49,7 +49,8 @@ Automated here (all verified passing on the PR firmware):
 | 13 | arp keeps arpeggiating after key-off with pedal, stops on release | sustain with arp |
 | 14 | MIDI clip: outgoing note-off deferred to pedal release | note sent out via a midi clip |
 | 15 | record with pedal, then sustain over the looping clip (sequencer interplay) | record while sustaining / sequencer + midi in |
-| 16 | saved song: recorded note length extends to pedal release (281 vs ~48 ticks) | record while sustaining |
+| 16 | learnable SUSTAIN command: factory default CC64/any-channel, rebinding moves the pedal and frees CC64, unbinding disables it | — |
+| 17 | saved song: recorded note length extends to pedal release (281 vs ~48 ticks) | record while sustaining |
 
 Answered by code construction (the PR only defers **incoming external MIDI
 note-offs** in `PlaybackHandler::noteMessageReceived`; internally generated
@@ -69,12 +70,21 @@ Left for hardware / manual testing:
   routing, so behavior is identical by construction,
 - real CC64 pedal ergonomics.
 
-## Review observations (not test failures)
+## Fork additions on top of the PR
 
-- CC64 on a non-MPE channel is consumed entirely (`return` in
-  `midiCCReceived`): it can still be MIDI-learned (learn runs earlier), and
-  MIDI thru still forwards it, but it can no longer reach MIDI-follow CC
-  mappings or be recorded as CC automation.
+This branch extends the PR with a **learnable SUSTAIN command** (SETTINGS >
+MIDI > COMMANDS > SUSTAIN, factory default CC64 on any channel of any cable)
+and makes the pedal handler **fall through** instead of consuming the CC, so a
+CC mapped via MIDI follow or MIDI learn keeps firing (and recording as
+automation) alongside the pedal - verified with the MIDI-follow param popup
+(map `lpfFrequency` to 64, enable `display_param`): the same CC64 message
+shows `LPF FREQUENCY` *and* sustains the note. Rebinding or unbinding the
+command frees CC64 entirely (scenario 16). Flash byte 196 uses 0 = "flash
+predates the command" (re-applies the default) and 255 = explicitly unbound,
+so unlearning survives reboots. Note bindings learned to the command are
+inert - only CC bindings act as a pedal.
+
+## Review observations (not test failures)
 - Note-offs are deferred even for notes that never sounded (deferral happens
   before routing). Harmless — replayed offs are no-ops.
 - `clearSustainedNotes()` is not wired into playback-stop / song-swap (the PR
@@ -96,3 +106,7 @@ Left for hardware / manual testing:
   songs by directory diff, not mtime.
 - The stubbed SPI flash makes FlashStorage take the reset-defaults path
   (e.g. MIDI clock out enabled), not all-zeros.
+- Each gdb attach halts the CPU; the audio engine can respond to the apparent
+  overload by culling a sustaining voice, so voice-count assertions after
+  several probes must allow `>= 1`, not an exact count (the deferral store is
+  the exact observable).

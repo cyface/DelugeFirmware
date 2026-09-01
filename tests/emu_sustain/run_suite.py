@@ -163,7 +163,10 @@ class Suite:
             e.note_off(n)
         self.settle(1.5)
         p1 = e.probe()
-        held = p1["held"] == 3 and p1["voices"] >= 3
+        # voices >= 1, not == 3: each gdb attach halts the CPU, and the audio
+        # engine can respond to the apparent overload by culling a sustaining
+        # voice. The deferral semantics under test are the held count.
+        held = p1["held"] == 3 and p1["voices"] >= 1
         e.pedal(False)
         released = self.wait_voices(lambda v: v == 0, timeout=10)
         ok = held and bool(released)
@@ -497,6 +500,52 @@ class Suite:
             if "SYNTH" in e.gdb_eval("currentSong->currentClip->output->type"):
                 break
 
+    def s16_learnable_binding(self):
+        """The pedal is driven by the learnable SUSTAIN command (factory default:
+        CC64 on any channel). Rebinding it via the binding slot moves the pedal
+        to the new CC and frees CC64; unbinding disables the pedal entirely."""
+        e = self.emu
+        SLOT = "midiEngine.globalMIDICommands[(int)GlobalMIDICommand::SUSTAIN]"
+        p0 = e.probe()
+        default_ok = p0["sustainCmd"] == [253, 64]  # MIDI_CHANNEL_ANY, CC64
+
+        # Rebind to CC66 on channel 1 (stored as channel + IS_A_CC = 18).
+        e.gdb_set(f"{SLOT}.channelOrZone = 18", f"{SLOT}.noteOrCC = 66")
+        e.pedal(True)  # CC64: must no longer act as the pedal
+        self.sound_note(60)
+        e.note_off(60)
+        self.settle()
+        cc64_freed = e.probe()["held"] == 0
+        self.wait_voices(lambda v: v == 0)
+
+        e.cc(66, 127)  # new binding acts as the pedal
+        self.sound_note(60)
+        e.note_off(60)
+        self.settle()
+        cc66_holds = e.probe()["held"] == 1
+        e.cc(66, 0)
+        self.wait_voices(lambda v: v == 0)
+
+        # Unbind: no pedal at all.
+        e.gdb_set(f"{SLOT}.channelOrZone = 255")
+        e.cc(66, 127)
+        self.sound_note(60)
+        e.note_off(60)
+        self.settle()
+        unbound_ok = e.probe()["held"] == 0
+        self.wait_voices(lambda v: v == 0)
+        e.cc(66, 0)
+
+        # Restore the factory default for the remaining scenarios.
+        e.gdb_set(f"{SLOT}.channelOrZone = 253", f"{SLOT}.noteOrCC = 64")
+        ok = default_ok and cc64_freed and cc66_holds and unbound_ok
+        report(
+            "16 learnable SUSTAIN command: default CC64/any, rebind + unbind",
+            ok,
+            f"default={p0.get('sustainCmd')} cc64freed={cc64_freed} "
+            f"cc66holds={cc66_holds} unbound={unbound_ok}",
+        )
+
     @staticmethod
     def _has_note_off(data, note):
         # note-off = 0x8x nn vv, or 0x9x nn 00
@@ -542,7 +591,7 @@ def check_saved_song(sd_dir, pre_existing):
     files = sorted(list_songs(sd_dir) - pre_existing)
     if not files:
         report(
-            "16 saved song: recorded note extends to pedal release",
+            "17 saved song: recorded note extends to pedal release",
             False,
             "no song saved during this run was written back",
         )
@@ -570,7 +619,7 @@ def check_saved_song(sd_dir, pre_existing):
     if not lengths:
         snippet = "\n".join(ln for ln in xml.splitlines() if "note" in ln.lower())[:500]
         report(
-            "16 saved song: recorded note extends to pedal release",
+            "17 saved song: recorded note extends to pedal release",
             False,
             f"{os.path.basename(newest)}: no notes parsed; snippet: {snippet!r}",
         )
@@ -578,7 +627,7 @@ def check_saved_song(sd_dir, pre_existing):
     longest = max(lengths)
     ok = longest >= 60
     report(
-        "16 saved song: recorded note extends to pedal release",
+        "17 saved song: recorded note extends to pedal release",
         ok,
         f"{os.path.basename(newest)} note lengths={lengths} (>=60 ticks expected)",
     )
