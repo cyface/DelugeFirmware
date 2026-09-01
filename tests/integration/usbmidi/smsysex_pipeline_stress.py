@@ -115,9 +115,12 @@ class Pipeliner:
         self.d = d
         self.stats = {"timeouts": 0, "malformed": 0, "unmatched": 0}
 
-    def _send(self, obj):
+    def _send(self, obj, busy=()):
         seq = self.d.seq
         self.d.seq = (self.d.seq + 1) & 0x7F or 1
+        while seq in busy:  # never reuse a seq that is still in flight
+            seq = self.d.seq
+            self.d.seq = (self.d.seq + 1) & 0x7F or 1
         msg = HEADER + [0x04, seq]
         msg += list(json.dumps(obj, separators=(",", ":")).encode())
         msg.append(0xF7)
@@ -162,7 +165,8 @@ class Pipeliner:
                 if addr in chunks:
                     continue  # a late reply already covered it
                 seq = self._send(
-                    {"read": {"fid": fid, "addr": addr, "size": READ_BLOCK}}
+                    {"read": {"fid": fid, "addr": addr, "size": READ_BLOCK}},
+                    busy=pending,
                 )
                 pending[seq] = (addr, time.monotonic() + per_request_timeout)
             got = self._poll()
