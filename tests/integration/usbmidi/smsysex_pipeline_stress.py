@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Pipelined smSysex read stress test against a connected Deluge, over rtmidi.
 
+Needs python-rtmidi and a Deluge connected over USB.
+
 Exercises the USB MIDI send (device->host) path under concurrent smSysex
 requests. Writes a random test file to the card serially, then reads it back
 with a sliding window of 1/2/3 requests in flight, byte-verifying every pass
@@ -18,7 +20,6 @@ Usage:
     python3 smsysex_pipeline_stress.py [--size KB] [--reps-w2 N] [--reps-w3 N]
                                        [--read-timeout S] [--max-retries N]
 
-Requires: python-rtmidi, a Deluge connected over USB in peripheral mode.
 The write phase uses 600-byte chunks to stay under the macOS CoreMIDI
 ~752-byte inbound sysex limit; reads use 1024-byte blocks (device->host is
 unaffected). The test file (CLAUDPIP.TMP on the card root) is deleted at
