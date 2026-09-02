@@ -77,6 +77,7 @@ Tap **calibrate** at the bottom right, or press and hold anywhere for about a se
 | Fit to screen | Gives up exact pad-for-pad pitch and spreads the eight rows over the height that is actually visible. Use it when a browser app's toolbar eats the bottom row: the top and bottom rows still line up, which is most of the value. The line above it says whether the rows currently fit. |
 | Text size | Scales the type without changing the row pitch. |
 | Pixels per mm | Only used to show the pitch in millimetres. Set it so the striped bar measures 100 mm against a ruler, then the pitch readout is trustworthy. |
+| Status line | Which end the connection/song line and the calibrate button sit on. Put it at the same end as the browser app's own toolbar so the dead space is all in one place instead of one strip at each end. |
 | Rotate 180° | For mounting the phone upside down, so the cable points away from you. Rotates the whole page, text included — an iPhone will not rotate into upside-down portrait on its own. |
 | Flip top/bottom | Reverses the row order only, leaving the text alone. For when the rows read the wrong way round but the phone is the right way up. |
 
