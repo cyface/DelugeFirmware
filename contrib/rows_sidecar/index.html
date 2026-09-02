@@ -109,6 +109,11 @@
   .btns button.primary { background: #23472f; border-color: #2ee66b60; }
   /* one tick per 10 mm; the spacing is set from the pixels-per-mm value */
   #ruler { height: 26px; margin-top: 6px; border: 1px solid #333; border-radius: 4px; }
+  #diag {
+    margin-top: 22px; padding: 10px; border: 1px solid #262626; border-radius: 8px;
+    font: 11px/1.5 ui-monospace, Menlo, monospace; color: #8d8d8d; white-space: pre-wrap;
+    word-break: break-all;
+  }
 </style>
 </head>
 <body>
@@ -141,6 +146,8 @@
   <input type="range" id="c-ppm" min="3" max="12" step="0.01">
   <div id="ruler"></div>
 
+  <div id="diag"></div>
+
   <div class="btns">
     <button id="c-big">Big text: instrument</button>
     <button id="c-flip">Flip top/bottom</button>
@@ -166,31 +173,70 @@ const VIEW_REQUEST = new Uint8Array([...HDR, CMD_JSON, SEQ,
   ...[...'{"view":{}}'].map(c => c.charCodeAt(0)), 0xF7]);
 
 class WebMidiTransport {
-  constructor() { this.onMessage = () => {}; this.out = null; this.ports = []; }
+  constructor() {
+    this.onMessage = () => {};
+    this.ports = [];      // every output, best candidate first
+    this.out = null;      // the one being tried, or the one that answered
+    this.locked = false;  // true once a reply came back on this port
+    this.probe = 0;
+    this.inputNames = [];
+    this.sent = 0;      // requests written to a port
+    this.rxAny = 0;     // MIDI messages of any kind seen on any input
+    this.rxSysex = 0;   // ...that were SysEx
+    this.rxOurs = 0;    // ...that were a Deluge JSON reply
+  }
 
   async connect() {
     const access = await navigator.requestMIDIAccess({ sysex: true });
     access.onstatechange = () => this.rescan(access);
     this.rescan(access);
-    if (!this.out) throw new Error("no Deluge port");
+    if (!this.ports.length) throw new Error("no MIDI ports");
   }
 
   rescan(access) {
-    this.ports = [...access.outputs.values()].filter(p => /deluge/i.test(p.name));
-    const inputs = [...access.inputs.values()].filter(p => /deluge/i.test(p.name));
-    for (const input of inputs) {
+    // Port names are not dependable: rtmidi on a Mac says "Deluge Port 3", but a phone's
+    // MIDI stack may only give the endpoint name. So take every port, merely *prefer* the
+    // ones that say Deluge, and find the right one by asking (see nextPort).
+    const all = [...access.outputs.values()];
+    const named = all.filter(p => /deluge/i.test(p.name));
+    // The Deluge's SysEx port is its last one.
+    this.ports = (named.length ? named : all).slice().reverse();
+
+    // Listen on everything: the reply can only come from the Deluge either way.
+    this.inputNames = [...access.inputs.values()].map(p => p.name);
+    for (const input of access.inputs.values()) {
       input.onmidimessage = e => {
         const d = e.data;
-        if (d.length > 7 && d[0] === 0xF0 && d[1] === 0x00 && d[2] === 0x21 &&
-            d[3] === 0x7B && d[5] === CMD_JSON_REPLY) this.onMessage(d);
+        this.rxAny++;
+        if (d[0] !== 0xF0) return;
+        this.rxSysex++;
+        this.lastSysex = [...d.slice(0, 8)].map(b => b.toString(16).padStart(2, "0")).join(" ");
+        if (d.length > 7 && d[1] === 0x00 && d[2] === 0x21 && d[3] === 0x7B &&
+            d[5] === CMD_JSON_REPLY) {
+          this.rxOurs++;
+          this.locked = true;
+          this.onMessage(d);
+        }
       };
     }
-    // Port 3 is the Deluge's SysEx port, and is listed last.
+
     const wanted = cal.port && this.ports.find(p => p.name === cal.port);
-    this.out = wanted || this.ports[this.ports.length - 1] || null;
+    if (wanted) { this.out = wanted; this.locked = true; }
+    else if (!this.out || !this.ports.includes(this.out)) this.out = this.ports[0] || null;
   }
 
-  send(bytes) { if (this.out) this.out.send(bytes); }
+  /// While nothing has answered, work through the ports one poll at a time.
+  nextPort() {
+    if (this.locked || this.ports.length < 2) return;
+    this.probe = (this.probe + 1) % this.ports.length;
+    this.out = this.ports[this.probe];
+  }
+
+  send(bytes) {
+    if (!this.out) return;
+    try { this.out.send(bytes); this.sent++; }
+    catch (e) { this.lastError = String(e.message || e); }
+  }
 }
 
 /* ----------------------------------------------------------------- rendering */
@@ -313,8 +359,12 @@ function poll() {
   // not plugged in when the page loaded.
   if (!transport.out) { start(); return; }
   transport.send(VIEW_REQUEST);
+  if (calEl.classList.contains("on")) { fillPorts(); showDiag(); }
   if (performance.now() - lastReplyAt > DEAD_MS) {
-    setStatus(false, lastGen === null ? "no reply from the Deluge" : "disconnected");
+    transport.nextPort();
+    setStatus(false, lastGen === null
+      ? "no reply on " + (transport.out ? transport.out.name : "any port")
+      : "disconnected");
   }
 }
 
@@ -350,7 +400,7 @@ let holdFrom = null;
 document.body.addEventListener("pointerdown", e => {
   if (calEl.classList.contains("on")) return;
   holdFrom = { x: e.clientX, y: e.clientY };
-  holdTimer = setTimeout(() => calEl.classList.add("on"), 600);
+  holdTimer = setTimeout(() => { calEl.classList.add("on"); fillPorts(); showDiag(); }, 600);
 });
 document.body.addEventListener("pointermove", e => {
   if (holdFrom && Math.hypot(e.clientX - holdFrom.x, e.clientY - holdFrom.y) > 14) {
@@ -366,6 +416,8 @@ document.getElementById("note").addEventListener("pointerup", e => {
   clearTimeout(holdTimer);
   e.stopPropagation();
   calEl.classList.add("on");
+  fillPorts();
+  showDiag();
 });
 
 function bindSlider(id, key, parse) {
@@ -378,8 +430,21 @@ bindSlider("c-offset", "offset", v => parseInt(v, 10));
 bindSlider("c-scale", "scale", parseFloat);
 bindSlider("c-ppm", "ppm", parseFloat);
 
+function showDiag() {
+  const t = transport;
+  document.getElementById("diag").textContent = [
+    "out (" + t.ports.length + "): " + (t.ports.map(p => p.name).join(", ") || "none"),
+    "in  (" + t.inputNames.length + "): " + (t.inputNames.join(", ") || "none"),
+    "trying: " + (t.out ? t.out.name : "-") + (t.locked ? " (locked)" : ""),
+    "sent " + t.sent + "  rx " + t.rxAny + " (sysex " + t.rxSysex + ", ours " + t.rxOurs + ")",
+    t.lastSysex ? "last sysex: " + t.lastSysex : "",
+    t.lastError ? "error: " + t.lastError : "",
+  ].filter(Boolean).join("\n");
+}
+
 function fillPorts() {
   const sel = document.getElementById("c-port");
+  sel.title = transport.ports.map(p => p.name).join(", ");
   sel.innerHTML = "";
   for (const p of transport.ports) {
     const opt = document.createElement("option");
@@ -390,6 +455,7 @@ function fillPorts() {
   sel.onchange = () => {
     cal.port = sel.value;
     transport.out = transport.ports.find(p => p.name === sel.value) || transport.out;
+    transport.locked = true;   // an explicit choice stops the probing
     applyCal();
   };
 }
