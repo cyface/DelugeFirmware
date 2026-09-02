@@ -217,34 +217,81 @@ is a byte relay or a JSON cache and knows nothing about rows.
 
 ### 5.4 Alignment
 
-Pad pitch on the Deluge is fixed, but where the phone sits relative to the grid is
-not. A calibration control (hidden behind a long press) exposes:
+**The Deluge's pads are 12.7 mm apart** - exactly half an inch, measured against the
+hardware. That is the only fixed number; everything about where the phone sits is not,
+so calibration (tap *calibrate*, or long-press anywhere) exposes:
 
-- row pitch in CSS pixels,
+- row pitch, defaulting to 12.7 mm x the pixels-per-mm value,
 - vertical offset of the first row,
-- text scale.
+- text scale,
+- pixels per mm, set against a 100 mm ruler bar so the pitch readout in millimetres is
+  true on any phone,
+- **Fit to screen**, which abandons exact pad-for-pad pitch and spreads the eight rows
+  over whatever height is visible,
+- rotate 180 degrees, for mounting the phone upside down so its cable points away - an
+  iPhone will not rotate into upside-down portrait by itself,
+- flip row order, separate from the rotation,
+- which end the status line sits on,
+- whether the big line is the instrument or the section,
+- which MIDI port to use.
 
-Values persist in `localStorage`. Defaults target the iPhone 16 Pro Max in portrait.
+Values persist in `localStorage`.
 
-### 5.5 iOS notes
+Alignment is not free even with the right pitch. Eight rows at 12.7 mm need about
+100 mm of screen; a browser app's toolbar can take the bottom row's worth of it, and no
+CSS reaches into those pixels. Measured on an iPhone 16 Pro Max in Web MIDI Browser
+(which has no full-screen mode): pitch 12.7 mm, offset about 70 px, status line moved to
+the top so the dead space is all at one end, and the bottom row still slightly clipped -
+"close enough, totally usable". The remedies are, in order: a browser app with a
+full-screen mode, propping the phone up about a centimetre so its usable screen rather
+than its bottom edge spans the grid, or Fit to screen.
 
-- No wake lock over plain `http` or `file` URLs; set Auto-Lock to Never for a
-  session, or serve over `https` later.
-- The page may be opened from a file the Web MIDI Browser app can load, or served
-  from a laptop on the same network during evaluation.
-- Add-to-Home-Screen works without a service worker; offline caching does not.
+### 5.5 Notes from the wired evaluation
+
+- **Port names are not dependable.** On the Mac the ports are `Deluge Port 1..3`; on the
+  phone they came back as `MIDIWeb In` and `Network Session 1`, with nothing naming the
+  Deluge. Filtering on the name found nothing. The page now takes every port, merely
+  prefers ones that say Deluge, and finds the right one by sending to each in turn until
+  one answers. A port chosen by hand stops the probing and is remembered.
+- **The USB link needs the Deluge end re-seated** if the phone shows no Deluge port at
+  all. Plugging the cable in with the app already running was not enough once.
+- **Chrome 152 on macOS passes no SysEx over Web MIDI**, in either direction, while
+  rtmidi on the same machine is fine. `--disable-features=MidiMacUmp` fixes it; there is
+  no chrome://flags entry and macOS Chrome has no persistent flags file, so it needs a
+  launcher. This cost an hour of debugging the page for a browser bug - check
+  `hw_view.py` first.
+- Calibration carries a diagnostics block (both port lists, which port is being tried,
+  and counters for sent / received / SysEx received / replies matched) because a phone
+  has no console and there is no other way to tell a dead USB link from a filtering
+  mistake.
+- No wake lock over plain `http` or `file` URLs; set Auto-Lock to Never for a session, or
+  serve over `https` later.
+- Add-to-Home-Screen would give a chrome-free window, but a page added to the home screen
+  runs in WebKit, which has no Web MIDI. It is only useful to a bridge design that does
+  not need Web MIDI at all.
 
 ## 6. Evaluation setup (no bridge)
 
 Purpose: decide whether the display is worth a wireless bridge before building one.
 
-1. Build firmware with the `view` query and flash it.
-2. Connect the Deluge to a computer over USB and open the page in Chrome. Verify
-   ping, then rows, then scrolling and launch states.
-3. Connect the Deluge's USB device port to the iPhone with a USB-C to USB-B cable.
-   iOS is a class-compliant USB MIDI host; the Deluge is self-powered.
-4. Open the page in a Web MIDI capable iOS browser. Confirm it grants SysEx (ping
-   must return pong), then place the phone beside the grid and play for a session.
+1. Build firmware with the `view` query and flash it. A RAM chainload
+   (`.claude/skills/deluge-flash`) is enough to try it; the song survives the chainload,
+   though the display needs any SysEx message to wake it afterwards.
+2. Check the query from the command line first, with
+   `./dbt exec 'python3 .claude/skills/deluge-flash/hw_view.py --watch'`. It is the
+   ground truth for everything the page shows, and rules the browser in or out.
+3. Serve the page with `contrib/rows_sidecar/serve.py` and open it in desktop Chrome for
+   the layout, then connect the Deluge's USB device port to the iPhone with a USB-C to
+   USB-B cable. iOS is a class-compliant USB MIDI host; the Deluge is self-powered. The
+   Deluge has one USB-B socket and no USB-A.
+4. Open the served URL in a Web MIDI capable iOS browser, grant SysEx, place the phone
+   beside the grid and calibrate.
+
+**Status: done, 2026-09-02.** The chain works end to end: firmware to USB to phone,
+rows tracking the song at 4 Hz. Alignment settled at the true 12.7 mm pitch with the
+bottom row slightly clipped by the browser app's toolbar - judged usable. What remains
+is the part no amount of building settles: whether it earns its place over a few days of
+actually playing.
 
 Success criterion: the user finds themselves reading names from the phone rather
 than pressing pads to see them on the OLED.
@@ -267,6 +314,12 @@ nRF52840 Express and an AirLift FeatherWing (ESP32 Wi-Fi co-processor on SPI).
 
 Both designs are CircuitPython. For either, `boot.py` must disable the CDC, mass
 storage and HID interfaces so the Deluge sees a plain MIDI device.
+
+The wired evaluation added an argument for the Wi-Fi design that was not obvious when
+this was written: a Web MIDI capable browser app on iOS has no full-screen mode and
+cannot be added to the home screen with Web MIDI intact, so its toolbar permanently eats
+the bottom pad row's worth of screen. A page that needs no Web MIDI runs in plain Safari,
+where Add-to-Home-Screen gives the whole display.
 
 The Wi-Fi cache is the better fit if the goal stays "show me the names". The BLE
 relay is the better foundation if the page grows into a remote control. The page
@@ -314,6 +367,7 @@ Settled:
 1. ~~Firmware `view` query, verified from a desktop browser.~~ Done; `hw_view.py` is the
    command-line probe.
 2. ~~Page over Web MIDI with calibration.~~ Done.
-3. Wired iPhone evaluation. ← here
-4. Decision point: build a bridge or stop.
+3. ~~Wired iPhone evaluation.~~ Working on the phone as of 2026-09-02; playing time is
+   what is left.
+4. Decision point: build a bridge or stop. ← here
 5. Bridge, push mode, and extensions as warranted.
