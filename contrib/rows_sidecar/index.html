@@ -68,8 +68,17 @@
   .row.stopped { opacity: .55; }
   .row.soloed .dot { background: #ffd23f; border-color: #ffd23f; }
   .row.armed .dot { animation: blink .5s steps(2, start) infinite; }
-  .row.recarmed .dot { background: #ff3b30; border-color: #ff3b30; }
   @keyframes blink { to { opacity: .15; } }
+
+  /* clip editor only: the row the gold knobs are pointed at, and rows with nothing
+     recorded on them in this clip */
+  .row.selected { background: #ffffff0e; }
+  .row.selected .name { color: #fff; }
+  .row.selected .swatch { box-shadow: 0 0 0 2px #ffffff55; }
+  .row.silent .swatch { opacity: .3; }
+  /* a pad that is a note the clip has no row for: real, but nothing is on it */
+  .row.ghost { opacity: .4; }
+  .row.ghost .dot { opacity: .3; }
 
   /* dimmed because the Deluge is showing something else */
   #rows.stale { opacity: .3; filter: saturate(.4); }
@@ -261,8 +270,10 @@ class WebMidiTransport {
 }
 
 /* ----------------------------------------------------------------- rendering */
-const GLYPH = { synth: "SYNTH", kit: "KIT", midi: "MIDI", cv: "CV", audio: "AUDIO", none: "" };
-const ACTIVE = 1, SOLOED = 2, ARMED = 4, REC_ARMED = 8;
+// A sound drum and a melodic note need no label - the name says it - so their glyph is blank.
+const GLYPH = { synth: "SYNTH", kit: "KIT", midi: "MIDI", cv: "CV", audio: "AUDIO",
+                drum: "", note: "", gate: "GATE", empty: "EMPTY", none: "" };
+const ACTIVE = 1, SOLOED = 2, ARMED = 4, HAS_NOTES = 8, SELECTED = 16;
 
 const rowsEl = document.getElementById("rows");
 const rowEls = [];
@@ -283,22 +294,52 @@ for (let i = 0; i < 8; i++) {
   });
 }
 
+/// The subtitle is a type glyph plus however many detail crumbs there are; with no glyph the
+/// separator in front of the first crumb would be a stray dot.
+function setSub(el, glyph, parts) {
+  const text = parts.filter(Boolean).join(" · ");
+  el.type.textContent = glyph;
+  el.detail.textContent = !text ? "" : (glyph ? " · " + text : text);
+}
+
 function paint(view) {
   const rows = cal.flip ? [...view.rows].reverse() : view.rows;
-  const isRows = view.layout === "rows";
+  const layout = view.layout;
+  // The clip editor puts the clip's own note rows on the pads: kit rows, or notes.
+  const inClip = layout === "kit" || layout === "notes";
+
+  // Every row of a kit is a drum and every row of a melodic clip a note, so the firmware leaves
+  // the type off those and spends the bytes on names instead.
+  const defaultType = layout === "kit" ? "drum" : layout === "notes" ? "note" : "none";
 
   rows.forEach((r, i) => {
     const el = rowEls[i];
-    const empty = !r.t || r.t === "none";
+    const t = r.t || defaultType;
+    const empty = t === "none";
     const s = r.s || 0;
+    // A melodic clip's pads are notes whether or not the clip has a row for them. Such a pad
+    // is neither playing nor stopped, so it gets the muted "ghost" treatment instead.
+    const real = !empty && (!inClip || r.x !== undefined);
 
     el.row.className = "row" +
       (empty ? " empty" : "") +
-      (!empty && (s & ACTIVE) ? " playing" : "") +
-      (!empty && !(s & ACTIVE) ? " stopped" : "") +
+      (real && (s & ACTIVE) ? " playing" : "") +
+      (real && !(s & ACTIVE) ? " stopped" : "") +
+      (!empty && !real ? " ghost" : "") +
       ((s & SOLOED) ? " soloed" : "") +
       ((s & ARMED) ? " armed" : "") +
-      ((s & REC_ARMED) ? " recarmed" : "");
+      (inClip && (s & SELECTED) ? " selected" : "") +
+      (real && inClip && !(s & HAS_NOTES) ? " silent" : "");
+
+    el.swatch.style.background = empty ? "" : "#" + (r.k || "666666");
+
+    if (inClip) {
+      // In here the name is the only thing worth the big line: a kit row is what it plays.
+      el.name.textContent = empty ? "" : (r.n || "");
+      setSub(el, empty ? "" : (GLYPH[t] ?? t.toUpperCase()),
+             empty ? [] : [r.c, layout === "kit" && r.x ? "row " + r.x : ""]);
+      return;
+    }
 
     // The big line is either what the row plays or where it sits in the song; whichever
     // one is not up top goes into the subtitle beside the type.
@@ -306,21 +347,15 @@ function paint(view) {
     const section = r.c || (r.x ? "Section " + r.x : "");
     const bigIsSection = cal.big === "section" && section;
 
-    el.swatch.style.background = empty ? "" : "#" + (r.k || "666666");
     el.name.textContent = empty ? "" : (bigIsSection ? section : instrument);
-    el.type.textContent = empty ? "" : (GLYPH[r.t] || r.t.toUpperCase());
-
-    const detail = [];
-    if (!empty) {
-      if (!isRows) detail.push((view.layout === "grid" ? "col " : "row ") + (r.y + 1));
-      const small = bigIsSection ? instrument : section;
-      if (small) detail.push(small);
-    }
-    el.detail.textContent = detail.length ? " · " + detail.join(" · ") : "";
+    setSub(el, empty ? "" : (GLYPH[t] ?? t.toUpperCase()),
+           empty ? [] : [layout === "rows" ? "" : (layout === "grid" ? "col " : "row ") + (r.y + 1),
+                         bigIsSection ? instrument : section]);
   });
 
-  document.getElementById("song").textContent =
-    (view.song || "unsaved song") + (view.layout === "rows" ? "" : " · " + view.layout);
+  document.getElementById("song").textContent = inClip
+    ? (view.inst || "clip") + (view.song ? " · " + view.song : "")
+    : (view.song || "unsaved song") + (layout === "rows" ? "" : " · " + layout);
 }
 
 /* -------------------------------------------------------------------- state */
@@ -368,13 +403,16 @@ transport.onMessage = data => {
     body = new TextDecoder().decode(data.subarray(7, data.length - 1));
     const view = JSON.parse(body)["^view"];
     if (!view) return;
-    if (view.ui === "session" || view.ui === "arranger") {
+    // Any layout the firmware fills rows for: the song's tracks, or a clip's note rows.
+    const haveRows = view.ui === "session" || view.ui === "arranger"
+                     || (view.ui === "clip" && (view.layout === "kit" || view.layout === "notes"));
+    if (haveRows) {
       lastView = view;
       rowsEl.classList.remove("stale");
       if (view.gen !== lastGen) { lastGen = view.gen; paint(view); }
     } else {
-      // Clip view, a menu, the browser: the rows on the pads are not song rows any
-      // more, so hold the last good picture and grey it out rather than blanking.
+      // An audio clip, the keyboard screen, the browser: the pads are not rows any more,
+      // so hold the last good picture and grey it out rather than blanking.
       rowsEl.classList.add("stale");
     }
     setStatus(true, view.ui);

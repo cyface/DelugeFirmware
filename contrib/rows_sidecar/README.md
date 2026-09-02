@@ -28,10 +28,12 @@ and Chrome will refuse Web MIDI there — that only matters for the desktop, see
 
 **Chrome 152 on macOS drops all SysEx** in both directions: ports enumerate, permission is
 granted, and not one message gets through, while any other MIDI client on the same machine
-works. It is the UMP MIDI backend Chrome switched to; disabling it fixes it:
+works. It is the UMP MIDI backend Chrome switched to. Either use a newer channel (Chrome Beta
+153 was the workaround here) or turn the backend off:
 
 ```bash
 open -na "Google Chrome" --args --disable-features=MidiMacUmp
+open -na "Google Chrome Beta" --args http://localhost:8080/       # or just use Beta
 ```
 
 Verified here on 152.0.7977.76. If a plain Chrome shows *no reply from the Deluge* while
@@ -85,14 +87,35 @@ Values are kept in `localStorage` on that phone.
 
 ## What the rows mean
 
+### In the song
+
 - The colour bar is a colour actually on that row of pads: the middle note row's colour
   for an instrument clip, the clip's own for an audio clip, and the track hue the grid
   layout paints in grid layout. Section colour would be no use — a song living in one
   section would give you eight identical bars.
 - A green dot is playing, dim is stopped, yellow is soloing, a blinking dot is armed to
-  launch or stop, red is armed to record.
+  launch or stop.
 - Empty rows are a dash.
 - In grid layout or the arranger the entries are not pad rows; the subtitle says which
   column or output each one is, and the status line names the layout.
-- When the Deluge is in a clip, a menu or the browser, the last song view is held on
-  screen and greyed out, and the status line says which UI it is now showing.
+
+### In the clip editor
+
+Open an instrument clip and the eight rows become that clip's rows, scrolled with the clip
+rather than the song. The status line shows the instrument's name instead of the song's.
+
+- **A kit** puts each row's name on the big line. Most kits do not name their rows at all —
+  the factory ones carry no names whatsoever — so a row with no name of its own shows the
+  sample it plays, `808 Kick` out of `SAMPLES/DRUMS/Kick/808 Kick.wav`, which is what you
+  would call the row anyway. Failing both it shows its number.
+- MIDI and gate rows say where they point (`CH3 · N36`, `GATE 2`) under the name.
+- The subtitle also counts the row within the kit, so a kit taller than eight rows still
+  tells you where in it you are scrolled.
+- A green dot is an unmuted row; dim is muted. The row the gold knobs and the menus are
+  pointed at is highlighted, and a row with nothing recorded on it in this clip has a faded
+  colour bar.
+- **A melodic clip** shows note names. Pads whose note the clip has no row for are dimmed
+  right down: they are playable, but there is nothing on them.
+- The keyboard screen, an audio clip and the automation view do not lay the pads out in these
+  eight rows, so there the last good picture is held and greyed and the status line names the
+  screen you are on.
