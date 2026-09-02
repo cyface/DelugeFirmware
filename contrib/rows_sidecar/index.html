@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Deluge Rows</title>
+<style>
+  :root {
+    --bg: #000;
+    --fg: #f2f2f2;
+    --dim: #6a6a6a;
+    --line: #1e1e1e;
+    --pitch: 77px;      /* one pad row, in CSS pixels */
+    --offset: 0px;      /* nudge the whole block down the screen */
+    --scale: 1;         /* text size multiplier */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--fg);
+    font: 500 16px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-text-size-adjust: none;
+  }
+
+  /* ---- the eight rows -------------------------------------------------- */
+  #rows {
+    position: absolute; left: 0; right: 0;
+    top: calc(env(safe-area-inset-top, 0px) + var(--offset));
+  }
+  .row {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    height: var(--pitch); padding: 0 10px 0 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .row:first-child { border-top: 1px solid var(--line); }
+
+  .swatch {                              /* nearest edge to the Deluge */
+    flex: none; width: 14px; align-self: stretch; margin: 3px 0;
+    border-radius: 0 5px 5px 0; background: #333;
+  }
+  .type {
+    font-weight: 700; letter-spacing: .06em; color: #8d8d8d;
+  }
+  .text { flex: 1; min-width: 0; }
+  .name {
+    font-size: calc(26px * var(--scale)); font-weight: 620; letter-spacing: -.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sub {
+    font-size: calc(13px * var(--scale)); color: var(--dim); margin-top: 3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .dot {
+    flex: none; width: calc(14px * var(--scale)); height: calc(14px * var(--scale));
+    border-radius: 50%; border: 2px solid var(--dim);
+  }
+
+  .row.empty .swatch { background: #141414; }
+  .row.empty .name::after { content: "\2014"; color: #262626; }
+
+  .row.playing .dot { background: #2ee66b; border-color: #2ee66b; box-shadow: 0 0 10px #2ee66b90; }
+  .row.stopped { opacity: .55; }
+  .row.soloed .dot { background: #ffd23f; border-color: #ffd23f; }
+  .row.armed .dot { animation: blink .5s steps(2, start) infinite; }
+  .row.recarmed .dot { background: #ff3b30; border-color: #ff3b30; }
+  @keyframes blink { to { opacity: .15; } }
+
+  /* dimmed because the Deluge is showing something else */
+  #rows.stale { opacity: .3; filter: saturate(.4); }
+
+  /* ---- header / status ------------------------------------------------- */
+  #bar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--dim); background: linear-gradient(transparent, #000 40%);
+  }
+  #led { width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; flex: none; }
+  #led.ok { background: #2ee66b; }
+  #bar b { color: #a0a0a0; font-weight: 600; }
+  #note { margin-left: auto; text-align: right; }
+
+  /* ---- calibration ----------------------------------------------------- */
+  #cal {
+    position: absolute; inset: 0; z-index: 10; display: none;
+    background: #0b0b0bf2; padding: 20px; overflow: auto;
+    font-size: 14px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  }
+  #cal.on { display: block; }
+  #cal h2 { margin: 0 0 4px; font-size: 17px; }
+  #cal p.hint { margin: 0 0 18px; color: var(--dim); font-size: 12px; line-height: 1.4; }
+  #cal label { display: block; margin: 14px 0 4px; color: var(--dim); font-size: 12px; }
+  #cal .val { color: var(--fg); font-variant-numeric: tabular-nums; }
+  #cal input[type=range] { width: 100%; accent-color: #2ee66b; }
+  #cal select { width: 100%; padding: 8px; background: #1a1a1a; color: var(--fg); border: 1px solid #333; border-radius: 8px; font-size: 14px; }
+  .btns { display: flex; gap: 8px; margin-top: 22px; flex-wrap: wrap; }
+  .btns button {
+    flex: 1 1 40%; padding: 12px; font-size: 14px; font-weight: 600;
+    color: var(--fg); background: #1a1a1a; border: 1px solid #333; border-radius: 10px;
+  }
+  .btns button.primary { background: #23472f; border-color: #2ee66b60; }
+  /* one tick per 10 mm; the spacing is set from the pixels-per-mm value */
+  #ruler { height: 26px; margin-top: 6px; border: 1px solid #333; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div id="rows"></div>
+
+<div id="bar">
+  <span id="led"></span><b id="conn">connecting…</b>
+  <span id="song"></span>
+  <span id="note">hold to calibrate</span>
+</div>
+
+<div id="cal">
+  <h2>Calibration</h2>
+  <p class="hint">Line the rows up with the pad grid, then tap Done. Values are kept on this phone.</p>
+
+  <label>MIDI port</label>
+  <select id="c-port"></select>
+
+  <label>Row pitch <span class="val" id="c-pitch-v"></span></label>
+  <input type="range" id="c-pitch" min="40" max="120" step="0.5">
+
+  <label>Top offset <span class="val" id="c-offset-v"></span></label>
+  <input type="range" id="c-offset" min="-120" max="360" step="1">
+
+  <label>Text size <span class="val" id="c-scale-v"></span></label>
+  <input type="range" id="c-scale" min="0.6" max="1.6" step="0.05">
+
+  <label>Pixels per mm <span class="val" id="c-ppm-v"></span> — set so the bar below measures 100&nbsp;mm</label>
+  <input type="range" id="c-ppm" min="3" max="12" step="0.01">
+  <div id="ruler"></div>
+
+  <div class="btns">
+    <button id="c-big">Big text: instrument</button>
+    <button id="c-flip">Flip top/bottom</button>
+    <button id="c-reset">Reset</button>
+    <button id="c-done" class="primary">Done</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ transport
+ * One SysEx request every POLL_MS, one reply back. The page knows the vendor
+ * header and nothing else about the firmware.
+ */
+const HDR = [0xF0, 0x00, 0x21, 0x7B, 0x01];
+const CMD_JSON = 0x04, CMD_JSON_REPLY = 0x05;
+const SEQ = 0x08;                 // any sequence byte; the reply echoes it back
+const POLL_MS = 250;
+const DEAD_MS = 2000;
+
+const VIEW_REQUEST = new Uint8Array([...HDR, CMD_JSON, SEQ,
+  ...[...'{"view":{}}'].map(c => c.charCodeAt(0)), 0xF7]);
+
+class WebMidiTransport {
+  constructor() { this.onMessage = () => {}; this.out = null; this.ports = []; }
+
+  async connect() {
+    const access = await navigator.requestMIDIAccess({ sysex: true });
+    access.onstatechange = () => this.rescan(access);
+    this.rescan(access);
+    if (!this.out) throw new Error("no Deluge port");
+  }
+
+  rescan(access) {
+    this.ports = [...access.outputs.values()].filter(p => /deluge/i.test(p.name));
+    const inputs = [...access.inputs.values()].filter(p => /deluge/i.test(p.name));
+    for (const input of inputs) {
+      input.onmidimessage = e => {
+        const d = e.data;
+        if (d.length > 7 && d[0] === 0xF0 && d[1] === 0x00 && d[2] === 0x21 &&
+            d[3] === 0x7B && d[5] === CMD_JSON_REPLY) this.onMessage(d);
+      };
+    }
+    // Port 3 is the Deluge's SysEx port, and is listed last.
+    const wanted = cal.port && this.ports.find(p => p.name === cal.port);
+    this.out = wanted || this.ports[this.ports.length - 1] || null;
+  }
+
+  send(bytes) { if (this.out) this.out.send(bytes); }
+}
+
+/* ----------------------------------------------------------------- rendering */
+const GLYPH = { synth: "SYNTH", kit: "KIT", midi: "MIDI", cv: "CV", audio: "AUDIO", none: "" };
+const ACTIVE = 1, SOLOED = 2, ARMED = 4, REC_ARMED = 8;
+
+const rowsEl = document.getElementById("rows");
+const rowEls = [];
+for (let i = 0; i < 8; i++) {
+  const row = document.createElement("div");
+  row.className = "row empty";
+  row.innerHTML = '<div class="swatch"></div>' +
+                  '<div class="text"><div class="name"></div>' +
+                  '<div class="sub"><span class="type"></span><span class="detail"></span></div></div>' +
+                  '<div class="dot"></div>';
+  rowsEl.appendChild(row);
+  rowEls.push({
+    row,
+    swatch: row.querySelector(".swatch"),
+    name: row.querySelector(".name"),
+    type: row.querySelector(".type"),
+    detail: row.querySelector(".detail"),
+  });
+}
+
+function paint(view) {
+  const rows = cal.flip ? [...view.rows].reverse() : view.rows;
+  const isRows = view.layout === "rows";
+
+  rows.forEach((r, i) => {
+    const el = rowEls[i];
+    const empty = !r.t || r.t === "none";
+    const s = r.s || 0;
+
+    el.row.className = "row" +
+      (empty ? " empty" : "") +
+      (!empty && (s & ACTIVE) ? " playing" : "") +
+      (!empty && !(s & ACTIVE) ? " stopped" : "") +
+      ((s & SOLOED) ? " soloed" : "") +
+      ((s & ARMED) ? " armed" : "") +
+      ((s & REC_ARMED) ? " recarmed" : "");
+
+    // The big line is either what the row plays or where it sits in the song; whichever
+    // one is not up top goes into the subtitle beside the type.
+    const instrument = r.n || "";
+    const section = r.c || (r.x ? "Section " + r.x : "");
+    const bigIsSection = cal.big === "section" && section;
+
+    el.swatch.style.background = empty ? "" : "#" + (r.k || "666666");
+    el.name.textContent = empty ? "" : (bigIsSection ? section : instrument);
+    el.type.textContent = empty ? "" : (GLYPH[r.t] || r.t.toUpperCase());
+
+    const detail = [];
+    if (!empty) {
+      if (!isRows) detail.push((view.layout === "grid" ? "col " : "row ") + (r.y + 1));
+      const small = bigIsSection ? instrument : section;
+      if (small) detail.push(small);
+    }
+    el.detail.textContent = detail.length ? " · " + detail.join(" · ") : "";
+  });
+
+  document.getElementById("song").textContent =
+    (view.song || "unsaved song") + (view.layout === "rows" ? "" : " · " + view.layout);
+}
+
+/* -------------------------------------------------------------------- state */
+const DEFAULTS = { pitch: 77, offset: 0, scale: 1, ppm: 6.04, flip: false, big: "instrument", port: "" };
+let cal = { ...DEFAULTS };
+try { Object.assign(cal, JSON.parse(localStorage.getItem("delugeRowsCal") || "{}")); } catch (e) {}
+
+function applyCal() {
+  const root = document.documentElement.style;
+  root.setProperty("--pitch", cal.pitch + "px");
+  root.setProperty("--offset", cal.offset + "px");
+  root.setProperty("--scale", cal.scale);
+  document.getElementById("ruler").style.background =
+    `repeating-linear-gradient(90deg, #2ee66b 0 1px, transparent 1px ${cal.ppm * 10}px)`;
+  document.getElementById("c-pitch-v").textContent =
+    cal.pitch.toFixed(1) + " px · " + (cal.pitch / cal.ppm).toFixed(1) + " mm";
+  document.getElementById("c-offset-v").textContent = cal.offset + " px";
+  document.getElementById("c-scale-v").textContent = cal.scale.toFixed(2) + "×";
+  document.getElementById("c-ppm-v").textContent = cal.ppm.toFixed(2);
+  try { localStorage.setItem("delugeRowsCal", JSON.stringify(cal)); } catch (e) {}
+}
+
+/* --------------------------------------------------------------------- loop */
+const transport = new WebMidiTransport();
+let lastGen = null, lastReplyAt = 0, lastView = null;
+
+transport.onMessage = data => {
+  lastReplyAt = performance.now();
+  let body;
+  try {
+    body = new TextDecoder().decode(data.subarray(7, data.length - 1));
+    const view = JSON.parse(body)["^view"];
+    if (!view) return;
+    if (view.ui === "session" || view.ui === "arranger") {
+      lastView = view;
+      rowsEl.classList.remove("stale");
+      if (view.gen !== lastGen) { lastGen = view.gen; paint(view); }
+    } else {
+      // Clip view, a menu, the browser: the rows on the pads are not song rows any
+      // more, so hold the last good picture and grey it out rather than blanking.
+      rowsEl.classList.add("stale");
+    }
+    setStatus(true, view.ui);
+  } catch (e) {
+    setStatus(false, "bad reply");
+    console.warn("bad reply", e, body);
+  }
+};
+
+function setStatus(ok, detail) {
+  document.getElementById("led").className = ok ? "ok" : "";
+  document.getElementById("conn").textContent = ok ? detail : (detail || "no reply");
+}
+
+function poll() {
+  transport.send(VIEW_REQUEST);
+  if (lastReplyAt && performance.now() - lastReplyAt > DEAD_MS) setStatus(false, "disconnected");
+}
+
+async function start() {
+  if (!navigator.requestMIDIAccess) {
+    setStatus(false, "no Web MIDI in this browser");
+    return;
+  }
+  try {
+    await transport.connect();
+    fillPorts();
+    setStatus(true, "connected");
+  } catch (e) {
+    setStatus(false, String(e.message || e));
+  }
+  setInterval(poll, POLL_MS);
+  poll();
+
+  try { await navigator.wakeLock.request("screen"); } catch (e) {}
+}
+
+/* -------------------------------------------------------------- calibration */
+const calEl = document.getElementById("cal");
+let holdTimer = null;
+
+document.body.addEventListener("pointerdown", () => {
+  if (calEl.classList.contains("on")) return;
+  holdTimer = setTimeout(() => calEl.classList.add("on"), 700);
+});
+for (const ev of ["pointerup", "pointercancel", "pointermove"]) {
+  document.body.addEventListener(ev, () => clearTimeout(holdTimer));
+}
+
+function bindSlider(id, key, parse) {
+  const el = document.getElementById(id);
+  el.value = cal[key];
+  el.addEventListener("input", () => { cal[key] = parse(el.value); applyCal(); });
+}
+bindSlider("c-pitch", "pitch", parseFloat);
+bindSlider("c-offset", "offset", v => parseInt(v, 10));
+bindSlider("c-scale", "scale", parseFloat);
+bindSlider("c-ppm", "ppm", parseFloat);
+
+function fillPorts() {
+  const sel = document.getElementById("c-port");
+  sel.innerHTML = "";
+  for (const p of transport.ports) {
+    const opt = document.createElement("option");
+    opt.value = opt.textContent = p.name;
+    opt.selected = transport.out && p.name === transport.out.name;
+    sel.appendChild(opt);
+  }
+  sel.onchange = () => {
+    cal.port = sel.value;
+    transport.out = transport.ports.find(p => p.name === sel.value) || transport.out;
+    applyCal();
+  };
+}
+
+const bigBtn = document.getElementById("c-big");
+function showBig() { bigBtn.textContent = "Big text: " + cal.big; }
+bigBtn.onclick = () => {
+  cal.big = cal.big === "instrument" ? "section" : "instrument";
+  showBig();
+  applyCal();
+  if (lastView) paint(lastView);
+};
+
+document.getElementById("c-flip").onclick = () => {
+  cal.flip = !cal.flip;
+  applyCal();
+  if (lastView) paint(lastView);
+};
+document.getElementById("c-reset").onclick = () => {
+  cal = { ...DEFAULTS, port: cal.port };
+  showBig();
+  for (const [id, key] of [["c-pitch", "pitch"], ["c-offset", "offset"], ["c-scale", "scale"], ["c-ppm", "ppm"]]) {
+    document.getElementById(id).value = cal[key];
+  }
+  applyCal();
+  if (lastView) paint(lastView);
+};
+document.getElementById("c-done").onclick = () => calEl.classList.remove("on");
+
+showBig();
+applyCal();
+start();
+</script>
+</body>
+</html>
