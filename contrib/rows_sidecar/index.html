@@ -81,6 +81,13 @@
     display: flex; align-items: center; gap: 8px;
     font-size: 12px; color: var(--dim); background: linear-gradient(transparent, #000 40%);
   }
+  /* Which end the status line lives on depends on how the phone is mounted and where the
+     browser app's own toolbar sits; both ends of dead space are better than one at each. */
+  body.bar-top #bar {
+    bottom: auto; top: 0;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    background: linear-gradient(#000 60%, transparent);
+  }
   #led { width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; flex: none; }
   #led.ok { background: #2ee66b; }
   #bar b { color: #a0a0a0; font-weight: 600; }
@@ -161,6 +168,7 @@
   <div id="diag"></div>
 
   <div class="btns">
+    <button id="c-bar">Status line: top</button>
     <button id="c-rot">Rotate 180°: off</button>
     <button id="c-big">Big text: instrument</button>
     <button id="c-flip">Flip top/bottom</button>
@@ -320,7 +328,7 @@ function paint(view) {
 const PAD_PITCH_MM = 12.7;
 /// 6.04 CSS px per mm is an iPhone 16 Pro Max; other phones need the ruler in calibration.
 const DEFAULTS = { pitch: PAD_PITCH_MM * 6.04, offset: 0, scale: 1, ppm: 6.04,
-                   flip: false, rot180: false, big: "instrument", port: "" };
+                   flip: false, rot180: false, barTop: true, big: "instrument", port: "" };
 let cal = { ...DEFAULTS };
 try { Object.assign(cal, JSON.parse(localStorage.getItem("delugeRowsCal") || "{}")); } catch (e) {}
 
@@ -337,6 +345,7 @@ function applyCal() {
   document.getElementById("c-scale-v").textContent = cal.scale.toFixed(2) + "×";
   document.getElementById("c-ppm-v").textContent = cal.ppm.toFixed(2);
   document.body.classList.toggle("rot180", !!cal.rot180);
+  document.body.classList.toggle("bar-top", cal.barTop !== false);
 
   // Eight rows at the true pad pitch do not always fit: a browser app's toolbar can eat the
   // bottom row's worth of screen. Say so plainly rather than letting a row hide under it.
@@ -494,6 +503,10 @@ document.getElementById("c-fit").onclick = () => {
   applyCal();
 };
 
+const barBtn = document.getElementById("c-bar");
+function showBar() { barBtn.textContent = "Status line: " + (cal.barTop !== false ? "top" : "bottom"); }
+barBtn.onclick = () => { cal.barTop = cal.barTop === false; showBar(); applyCal(); };
+
 const rotBtn = document.getElementById("c-rot");
 function showRot() { rotBtn.textContent = "Rotate 180\u00b0: " + (cal.rot180 ? "on" : "off"); }
 rotBtn.onclick = () => { cal.rot180 = !cal.rot180; showRot(); applyCal(); };
@@ -518,6 +531,7 @@ document.getElementById("c-reset").onclick = () => {
   cal = { ...DEFAULTS, ppm: cal.ppm, pitch: PAD_PITCH_MM * cal.ppm, port: cal.port };
   showBig();
   showRot();
+  showBar();
   for (const [id, key] of [["c-pitch", "pitch"], ["c-offset", "offset"], ["c-scale", "scale"], ["c-ppm", "ppm"]]) {
     document.getElementById(id).value = cal[key];
   }
@@ -528,6 +542,7 @@ document.getElementById("c-done").onclick = () => calEl.classList.remove("on");
 
 showBig();
 showRot();
+showBar();
 applyCal();
 start();
 </script>
