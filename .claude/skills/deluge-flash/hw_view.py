@@ -26,8 +26,15 @@ TYPE_GLYPH = {
     "midi": "M",
     "cv": "C",
     "audio": "A",
+    "drum": "d",  # clip editor: a kit row
+    "gate": "g",
+    "note": "n",
+    "empty": ".",
     "none": " ",
 }
+
+# ACTIVE, SOLOED, ARMED, then the two the clip editor adds: has notes, is selected.
+FLAGS = ((1, ">"), (2, "!"), (4, "*"), (8, "N"), (16, "@"))
 
 
 def request(mo, mi, timeout=2.0):
@@ -47,21 +54,23 @@ def show(frame: bytes, raw: bool) -> str:
     if raw:
         return f"{len(frame)} bytes\n{body}"
     view = json.loads(body)["^view"]
+    inst = f" inst={view['inst']!r}" if "inst" in view else ""
     head = (
-        f"ui={view['ui']} layout={view['layout']} song={view['song']!r} "
+        f"ui={view['ui']} layout={view['layout']} song={view['song']!r}{inst} "
         f"yScroll={view['yScroll']} playing={view['playing']} gen={view['gen']} "
         f"({len(frame)} bytes)"
     )
     lines = [head]
+    # A kit's rows are drums and a melodic clip's are notes unless the row says otherwise;
+    # the firmware leaves that off to spend the bytes on names.
+    default_type = {"kit": "drum", "notes": "note"}.get(view["layout"], "none")
     for r in view["rows"]:
         s = r.get("s", 0)
-        flags = (
-            "".join(c for bit, c in ((1, ">"), (2, "!"), (4, "*"), (8, "R")) if s & bit)
-            or "-"
-        )
+        flags = "".join(c for bit, c in FLAGS if s & bit) or "-"
         lines.append(
-            f"  y{r['y']} {TYPE_GLYPH.get(r['t'], '?')} {r.get('n', ''):<24.24}"
-            f" {r.get('c', ''):<14.14} #{r.get('k', '------')} {flags:<4} sec={r.get('x', '-')}"
+            f"  y{r['y']} {TYPE_GLYPH.get(r.get('t', default_type), '?')} "
+            f"{r.get('n', ''):<24.24}"
+            f" {r.get('c', ''):<14.14} #{r.get('k', '------')} {flags:<5} x={r.get('x', '-')}"
         )
     return "\n".join(lines)
 
