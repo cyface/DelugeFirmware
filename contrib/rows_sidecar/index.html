@@ -112,6 +112,14 @@
   .btns button.primary { background: #23472f; border-color: #2ee66b60; }
   /* one tick per 10 mm; the spacing is set from the pixels-per-mm value */
   #ruler { height: 26px; margin-top: 6px; border: 1px solid #333; border-radius: 4px; }
+  #fitline {
+    display: flex; align-items: center; gap: 10px; margin-top: 8px;
+    font-size: 11px; color: var(--dim);
+  }
+  #fitline button {
+    margin-left: auto; padding: 7px 12px; font-size: 12px; font-weight: 600;
+    color: var(--fg); background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+  }
   #diag {
     margin-top: 22px; padding: 10px; border: 1px solid #262626; border-radius: 8px;
     font: 11px/1.5 ui-monospace, Menlo, monospace; color: #8d8d8d; white-space: pre-wrap;
@@ -137,7 +145,8 @@
   <select id="c-port"></select>
 
   <label>Row pitch <span class="val" id="c-pitch-v"></span> — the pads are 12.7&nbsp;mm apart</label>
-  <input type="range" id="c-pitch" min="40" max="120" step="0.5">
+  <input type="range" id="c-pitch" min="30" max="120" step="0.5">
+  <div id="fitline"><span id="c-fit-v"></span> <button id="c-fit">Fit to screen</button></div>
 
   <label>Top offset <span class="val" id="c-offset-v"></span></label>
   <input type="range" id="c-offset" min="-120" max="360" step="1">
@@ -328,6 +337,14 @@ function applyCal() {
   document.getElementById("c-scale-v").textContent = cal.scale.toFixed(2) + "×";
   document.getElementById("c-ppm-v").textContent = cal.ppm.toFixed(2);
   document.body.classList.toggle("rot180", !!cal.rot180);
+
+  // Eight rows at the true pad pitch do not always fit: a browser app's toolbar can eat the
+  // bottom row's worth of screen. Say so plainly rather than letting a row hide under it.
+  const need = Math.round(cal.pitch * 8 + cal.offset);
+  const have = window.innerHeight;
+  document.getElementById("c-fit-v").textContent =
+    "8 rows need " + need + " px, screen has " + have + (need > have ? " px — bottom row is cut off" : " px");
+  document.getElementById("c-fit-v").style.color = need > have ? "#ff8000" : "";
   try { localStorage.setItem("delugeRowsCal", JSON.stringify(cal)); } catch (e) {}
 }
 
@@ -468,6 +485,14 @@ function fillPorts() {
     applyCal();
   };
 }
+
+// Give up exact pad-for-pad pitch and spread the eight rows over whatever height there is.
+// The top and bottom rows still line up, which is most of the value.
+document.getElementById("c-fit").onclick = () => {
+  cal.pitch = Math.max(30, (window.innerHeight - cal.offset) / 8);
+  document.getElementById("c-pitch").value = cal.pitch;
+  applyCal();
+};
 
 const rotBtn = document.getElementById("c-rot");
 function showRot() { rotBtn.textContent = "Rotate 180\u00b0: " + (cal.rot180 ? "on" : "off"); }
