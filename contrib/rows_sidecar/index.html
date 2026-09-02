@@ -24,6 +24,9 @@
     -webkit-user-select: none; user-select: none; -webkit-text-size-adjust: none;
     -webkit-touch-callout: none; touch-action: manipulation;
   }
+  /* For mounting the phone upside down, so its USB cable points away from you. An iPhone
+     will not rotate into upside-down portrait by itself, so the page does it. */
+  body.rot180 { transform: rotate(180deg); }
 
   /* ---- the eight rows -------------------------------------------------- */
   #rows {
@@ -149,6 +152,7 @@
   <div id="diag"></div>
 
   <div class="btns">
+    <button id="c-rot">Rotate 180°: off</button>
     <button id="c-big">Big text: instrument</button>
     <button id="c-flip">Flip top/bottom</button>
     <button id="c-reset">Reset</button>
@@ -303,7 +307,7 @@ function paint(view) {
 }
 
 /* -------------------------------------------------------------------- state */
-const DEFAULTS = { pitch: 77, offset: 0, scale: 1, ppm: 6.04, flip: false, big: "instrument", port: "" };
+const DEFAULTS = { pitch: 77, offset: 0, scale: 1, ppm: 6.04, flip: false, rot180: false, big: "instrument", port: "" };
 let cal = { ...DEFAULTS };
 try { Object.assign(cal, JSON.parse(localStorage.getItem("delugeRowsCal") || "{}")); } catch (e) {}
 
@@ -319,6 +323,7 @@ function applyCal() {
   document.getElementById("c-offset-v").textContent = cal.offset + " px";
   document.getElementById("c-scale-v").textContent = cal.scale.toFixed(2) + "×";
   document.getElementById("c-ppm-v").textContent = cal.ppm.toFixed(2);
+  document.body.classList.toggle("rot180", !!cal.rot180);
   try { localStorage.setItem("delugeRowsCal", JSON.stringify(cal)); } catch (e) {}
 }
 
@@ -460,6 +465,10 @@ function fillPorts() {
   };
 }
 
+const rotBtn = document.getElementById("c-rot");
+function showRot() { rotBtn.textContent = "Rotate 180\u00b0: " + (cal.rot180 ? "on" : "off"); }
+rotBtn.onclick = () => { cal.rot180 = !cal.rot180; showRot(); applyCal(); };
+
 const bigBtn = document.getElementById("c-big");
 function showBig() { bigBtn.textContent = "Big text: " + cal.big; }
 bigBtn.onclick = () => {
@@ -477,6 +486,7 @@ document.getElementById("c-flip").onclick = () => {
 document.getElementById("c-reset").onclick = () => {
   cal = { ...DEFAULTS, port: cal.port };
   showBig();
+  showRot();
   for (const [id, key] of [["c-pitch", "pitch"], ["c-offset", "offset"], ["c-scale", "scale"], ["c-ppm", "ppm"]]) {
     document.getElementById(id).value = cal[key];
   }
@@ -486,6 +496,7 @@ document.getElementById("c-reset").onclick = () => {
 document.getElementById("c-done").onclick = () => calEl.classList.remove("on");
 
 showBig();
+showRot();
 applyCal();
 start();
 </script>
