@@ -95,6 +95,10 @@ public:
 	void clipNeedsReRendering(Clip* clip) override;
 	void sampleNeedsReRendering(Sample* sample) override;
 	Clip* getClipOnScreen(int32_t yDisplay);
+	/// Resolve one of the eight on-screen rows for the `view` SysEx query. In the rows layout
+	/// `index` is a pad row and the clip shown there is returned through `clipOut`. In the grid
+	/// layout `index` selects one of the eight leftmost track columns and no clip is returned.
+	Output* getViewQueryRow(int32_t index, Clip** clipOut);
 	Output* getOutputFromPad(int32_t x, int32_t y);
 	void modEncoderAction(int32_t whichModEncoder, int32_t offset) override;
 	ActionResult verticalScrollOneSquare(int32_t direction);

@@ -3,6 +3,8 @@
 #include "gui/l10n/l10n.h"
 #include "gui/ui/ui.h"
 #include "gui/ui_timer_manager.h"
+#include "gui/views/arranger_view.h"
+#include "gui/views/session_view.h"
 #include "hid/display/oled.h"
 #include "hid/display/seven_segment.h"
 #include "hid/hid_sysex.h"
@@ -12,9 +14,16 @@
 #include "io/midi/midi_engine.h"
 #include "io/midi/sysex.h"
 #include "memory/general_memory_allocator.h"
+#include "model/clip/clip.h"
+#include "model/instrument/midi_instrument.h"
+#include "model/song/song.h"
+#include "playback/mode/session.h"
+#include "playback/playback_handler.h"
+#include "processing/audio_output.h"
 #include "processing/engines/audio_engine.h"
 #include "scheduler_api.h"
 #include "util/containers.h"
+#include "util/d_stringbuf.h"
 #include "util/pack.h"
 #include <cstring>
 
@@ -755,6 +764,242 @@ void smSysex::doPing(MIDICable& cable, JsonDeserializer& reader) {
 	sendMsg(cable, jWriter);
 }
 
+// The `view` query reports the eight rows currently on the pad grid, for a sidecar display
+// beside the Deluge. Keys are short and the reply is size-capped so it always fits in one
+// SysEx frame: the client polls and has no way to ask for a continuation.
+namespace {
+
+/// Longest run of source characters copied out of any one name.
+const uint32_t kMaxViewNameChars = 28;
+/// Hosts are only dependably transparent up to a 752 byte frame, so stay under that.
+const int32_t kMaxViewReplyBytes = 740;
+/// What a row with no text at all costs, including the comma before it.
+const int32_t kMinViewRowBytes = 46;
+/// Room kept for "gen", the closing braces and the 0xF7.
+const int32_t kViewReplyTailBytes = 26;
+
+/// Copies up to `maxChars` characters of `src` into `dest` as 7-bit clean JSON string content.
+/// Bytes with the high bit set become \u00XX, so a name using the Deluge's extended characters
+/// can never put an 0xF7 or an 8-bit byte inside the SysEx frame. `dest` must hold
+/// maxChars * 6 + 2 bytes.
+void escapeForJson(char const* src, char* dest, uint32_t maxChars) {
+	uint32_t written = 0;
+	for (uint32_t i = 0; i < maxChars && src[i]; i++) {
+		auto c = (uint8_t)src[i];
+		if (c == '"' || c == '\\') {
+			dest[written++] = '\\';
+			dest[written++] = (char)c;
+		}
+		else if (c < 0x20 || c >= 0x80) {
+			dest[written++] = '\\';
+			dest[written++] = 'u';
+			dest[written++] = '0';
+			dest[written++] = '0';
+			intToHex(c, &dest[written], 2);
+			written += 2;
+		}
+		else {
+			dest[written++] = (char)c;
+		}
+	}
+	dest[written] = 0;
+}
+
+/// The name the OLED would show for this output: the user's name if it has one, otherwise the
+/// generated one. Mirrors the name half of View::drawOutputNameFromDetails, but as text.
+/// `buffer` is only used when a name has to be generated, and must hold 16 bytes.
+char const* viewOutputName(Output* output, char* buffer) {
+	if (!output->name.isEmpty()) {
+		return output->name.get();
+	}
+
+	switch (output->type) {
+	case OutputType::MIDI_OUT: {
+		auto* instrument = (MIDIInstrument*)output;
+		int32_t channel = instrument->getChannel();
+		if (channel >= 16) {
+			return (channel == MIDI_CHANNEL_MPE_LOWER_ZONE)   ? "MPE Lower"
+			       : (channel == MIDI_CHANNEL_MPE_UPPER_ZONE) ? "MPE Upper"
+			                                                  : "Transpose";
+		}
+		memcpy(buffer, "MIDI ", 5);
+		slotToString(channel + 1, instrument->channelSuffix, &buffer[5], 1);
+		return buffer;
+	}
+
+	case OutputType::CV: {
+		memcpy(buffer, "CV ", 3);
+		intToString(((NonAudioInstrument*)output)->getChannel() + 1, &buffer[3]);
+		return buffer;
+	}
+
+	case OutputType::AUDIO:
+		return getOutputTypeName(OutputType::AUDIO, (int32_t)((AudioOutput*)output)->mode);
+
+	default:
+		return getOutputTypeName(output->type, 0);
+	}
+}
+
+char const* viewOutputTypeName(OutputType type) {
+	switch (type) {
+	case OutputType::SYNTH:
+		return "synth";
+	case OutputType::KIT:
+		return "kit";
+	case OutputType::MIDI_OUT:
+		return "midi";
+	case OutputType::CV:
+		return "cv";
+	case OutputType::AUDIO:
+		return "audio";
+	default:
+		return "none";
+	}
+}
+
+char const* viewUIName(UIType uiType) {
+	switch (uiType) {
+	case UIType::SESSION:
+		return "session";
+	case UIType::ARRANGER:
+		return "arranger";
+	case UIType::INSTRUMENT_CLIP:
+	case UIType::AUDIO_CLIP:
+	case UIType::KEYBOARD_SCREEN:
+	case UIType::AUTOMATION:
+		return "clip";
+	default:
+		return "other";
+	}
+}
+
+/// State bits reported as "s" for each row.
+enum ViewRowState {
+	VIEW_ROW_ACTIVE = 1,
+	VIEW_ROW_SOLOED = 2,
+	VIEW_ROW_ARMED = 4,
+	VIEW_ROW_REC_ARMED = 8,
+};
+
+} // namespace
+
+void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
+	char escaped[kMaxViewNameChars * 6 + 2];
+	char generated[16];
+
+	UI* rootUI = getRootUI();
+	UIType uiType = rootUI ? rootUI->getUIType() : UIType::NONE;
+	bool isSession = (uiType == UIType::SESSION);
+	bool isArranger = (uiType == UIType::ARRANGER);
+	bool isGrid = isSession && currentSong->sessionLayout == SessionLayoutType::SessionLayoutTypeGrid;
+
+	startReply(jWriter, reader);
+	jWriter.writeOpeningTag("^view", false, true);
+	jWriter.writeAttribute("ui", viewUIName(uiType), false);
+	jWriter.writeAttribute("layout", isArranger ? "arranger" : (isGrid ? "grid" : "rows"), false);
+	escapeForJson(currentSong->name.get(), escaped, kMaxViewNameChars);
+	jWriter.writeAttribute("song", escaped, false);
+	jWriter.writeAttribute("yScroll",
+	                       isArranger ? currentSong->arrangementYScroll
+	                                  : (isGrid ? currentSong->songGridScrollY : currentSong->songViewYScroll),
+	                       false);
+	jWriter.writeAttribute("xScroll", isGrid ? currentSong->songGridScrollX : 0, false);
+	jWriter.writeAttribute("playing", playbackHandler.isEitherClockActive() ? 1 : 0, false);
+	jWriter.writeArrayStart("rows", false, false);
+
+	for (int32_t index = 0; index < kDisplayHeight; index++) {
+		// Topmost pad row first, so the page can render the array straight down the screen.
+		int32_t y = kDisplayHeight - 1 - index;
+		int32_t rowsLeft = kDisplayHeight - index;
+		int32_t room =
+		    kMaxViewReplyBytes - jWriter.bytesWritten() - kViewReplyTailBytes - (rowsLeft - 1) * kMinViewRowBytes;
+
+		Output* output = nullptr;
+		Clip* clip = nullptr;
+		if (isSession) {
+			// In the grid layout the eight entries are the leftmost track columns, not pad rows.
+			output = sessionView.getViewQueryRow(isGrid ? index : y, &clip);
+		}
+		else if (isArranger) {
+			output = arrangerView.outputsOnScreen[y];
+		}
+
+		jWriter.writeOpeningTag(nullptr, false, false);
+		jWriter.writeAttribute("y", isGrid ? index : y, false);
+
+		if (!output) {
+			jWriter.writeAttribute("t", "none", false);
+			jWriter.closeTag();
+			continue;
+		}
+
+		Clip* colourClip = clip ? clip : output->getActiveClip();
+		uint32_t section = (colourClip && colourClip->section < kMaxNumSections) ? colourClip->section : 0;
+		RGB colour = colourClip ? defaultClipSectionColours[section] : RGB::monochrome(160);
+
+		uint32_t state = 0;
+		if (clip) {
+			state |= currentSong->isClipActive(clip) ? VIEW_ROW_ACTIVE : 0;
+			state |= clip->soloingInSessionMode ? VIEW_ROW_SOLOED : 0;
+			state |= (clip->armState != ArmState::OFF) ? VIEW_ROW_ARMED : 0;
+			state |= clip->armedForRecording ? VIEW_ROW_REC_ARMED : 0;
+		}
+		else {
+			bool soloed = output->soloingInArrangementMode;
+			state |= soloed ? (VIEW_ROW_ACTIVE | VIEW_ROW_SOLOED) : 0;
+			if (!currentSong->anyOutputsSoloingInArrangement && !output->mutedInArrangementMode) {
+				state |= VIEW_ROW_ACTIVE;
+			}
+			state |= output->armedForRecording ? VIEW_ROW_REC_ARMED : 0;
+		}
+
+		jWriter.writeAttribute("t", viewOutputTypeName(output->type), false);
+
+		char const* name = viewOutputName(output, generated);
+		int32_t textRoom = room - kMinViewRowBytes;
+		uint32_t nameChars = std::min<int32_t>(std::max<int32_t>(textRoom, 0), kMaxViewNameChars);
+		escapeForJson(name, escaped, nameChars);
+		jWriter.writeAttribute("n", escaped, false);
+
+		// The clip's own name is optional: it is usually unset, and it is the first thing to go
+		// when the reply is running out of room.
+		char const* clipName = clip ? clip->name.get() : "";
+		if (*clipName) {
+			int32_t clipRoom = textRoom - (int32_t)strlen(escaped) - 8;
+			uint32_t clipChars = std::min<int32_t>(std::max<int32_t>(clipRoom, 0), kMaxViewNameChars);
+			if (clipChars > 0) {
+				escapeForJson(clipName, escaped, clipChars);
+				jWriter.writeAttribute("c", escaped, false);
+			}
+		}
+
+		intToHex(colour.r, &escaped[0], 2);
+		intToHex(colour.g, &escaped[2], 2);
+		intToHex(colour.b, &escaped[4], 2);
+		jWriter.writeAttribute("k", escaped, false);
+		jWriter.writeAttribute("s", (int32_t)state, false);
+		if (colourClip) {
+			jWriter.writeAttribute("x", (int32_t)section + 1, false);
+		}
+		jWriter.closeTag();
+	}
+
+	jWriter.writeArrayEnding("rows", false, false);
+
+	// "gen" is written last so it can be a hash of everything before it: the page repaints only
+	// when it changes, and nothing in the firmware has to know when the rows went stale.
+	uint32_t gen = 2166136261u;
+	char const* payload = jWriter.getBufferPtr();
+	for (int32_t i = 7; i < jWriter.bytesWritten(); i++) {
+		gen = (gen ^ (uint8_t)payload[i]) * 16777619u;
+	}
+	jWriter.writeAttribute("gen", (int32_t)(gen & 0x3FFFFFFF), false);
+
+	jWriter.closeTag(true);
+	sendMsg(cable, jWriter);
+}
+
 uint32_t smSysex::decodeDataFromReader(JsonDeserializer& reader, uint8_t* dest, uint32_t destMax) {
 	char zip = 0;
 	if (!reader.readChar(&zip) || zip) // skip separator, fail if not there.
@@ -840,6 +1085,10 @@ void smSysex::handleNextSysEx() {
 		}
 		else if (!strcmp(tagName, "ping")) {
 			doPing(de.cable, parser);
+			goto done;
+		}
+		else if (!strcmp(tagName, "view")) {
+			sendView(de.cable, parser);
 			goto done;
 		}
 		parser.exitTag();
