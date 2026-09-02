@@ -136,7 +136,7 @@
   <label>MIDI port</label>
   <select id="c-port"></select>
 
-  <label>Row pitch <span class="val" id="c-pitch-v"></span></label>
+  <label>Row pitch <span class="val" id="c-pitch-v"></span> — the pads are 12.7&nbsp;mm apart</label>
   <input type="range" id="c-pitch" min="40" max="120" step="0.5">
 
   <label>Top offset <span class="val" id="c-offset-v"></span></label>
@@ -307,7 +307,11 @@ function paint(view) {
 }
 
 /* -------------------------------------------------------------------- state */
-const DEFAULTS = { pitch: 77, offset: 0, scale: 1, ppm: 6.04, flip: false, rot180: false, big: "instrument", port: "" };
+/// Measured centre to centre on the pad grid: exactly half an inch.
+const PAD_PITCH_MM = 12.7;
+/// 6.04 CSS px per mm is an iPhone 16 Pro Max; other phones need the ruler in calibration.
+const DEFAULTS = { pitch: PAD_PITCH_MM * 6.04, offset: 0, scale: 1, ppm: 6.04,
+                   flip: false, rot180: false, big: "instrument", port: "" };
 let cal = { ...DEFAULTS };
 try { Object.assign(cal, JSON.parse(localStorage.getItem("delugeRowsCal") || "{}")); } catch (e) {}
 
@@ -484,7 +488,9 @@ document.getElementById("c-flip").onclick = () => {
   if (lastView) paint(lastView);
 };
 document.getElementById("c-reset").onclick = () => {
-  cal = { ...DEFAULTS, port: cal.port };
+  // Keep the measured px/mm and re-derive the pitch from it, so a reset on a phone that has
+  // been ruler-calibrated lands on a real 12.7 mm rather than back on the iPhone's number.
+  cal = { ...DEFAULTS, ppm: cal.ppm, pitch: PAD_PITCH_MM * cal.ppm, port: cal.port };
   showBig();
   showRot();
   for (const [id, key] of [["c-pitch", "pitch"], ["c-offset", "offset"], ["c-scale", "scale"], ["c-ppm", "ppm"]]) {
