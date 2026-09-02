@@ -50,6 +50,7 @@ void moveFile(MIDICable& cable, JsonDeserializer& reader);
 void assignSession(MIDICable& cable, JsonDeserializer& reader);
 void doPing(MIDICable& cable, JsonDeserializer& reader);
 void doEcho(MIDICable& cable, JsonDeserializer& reader, int32_t frameLen);
+void sendView(MIDICable& cable, JsonDeserializer& reader);
 uint32_t decodeDataFromReader(JsonDeserializer& reader, uint8_t* dest, uint32_t destMax);
 
 // Helper functions for file operations

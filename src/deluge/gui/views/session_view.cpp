@@ -1891,6 +1891,27 @@ Clip* SessionView::getClipOnScreen(int32_t yDisplay) {
 	return currentSong->sessionClips.getClipAtIndex(index);
 }
 
+Output* SessionView::getViewQueryRow(int32_t index, Clip** clipOut) {
+	*clipOut = nullptr;
+
+	if (currentSong->sessionLayout == SessionLayoutType::SessionLayoutTypeGrid) {
+		// The grid puts tracks along the x axis, so the query reports the leftmost eight columns.
+		return gridTrackFromX(index, gridTrackCount());
+	}
+
+	int32_t clipIndex = index + currentSong->songViewYScroll;
+	if (clipIndex < 0 || clipIndex >= currentSong->sessionClips.getNumElements()) {
+		return nullptr;
+	}
+
+	Clip* clip = currentSong->sessionClips.getClipAtIndex(clipIndex);
+	if (!clip) {
+		return nullptr;
+	}
+	*clipOut = clip;
+	return clip->output;
+}
+
 void SessionView::redrawClipsOnScreen(bool doRender) {
 	if (doRender) {
 		// use root UI in case this is called from performance view
