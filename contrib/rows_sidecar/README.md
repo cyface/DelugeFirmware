@@ -53,8 +53,13 @@ DBT_NO_SYNC=1 ./dbt exec 'python3 .claude/skills/deluge-flash/hw_view.py --watch
 2. Put the Mac and the phone on the same Wi-Fi, run `serve.py`, and open the
    `http://<mac-ip>:8080/` URL it prints in a Web MIDI capable browser app.
 3. Grant SysEx access when the app asks.
-4. Add to Home Screen for a full-screen, chrome-free window. Set Auto-Lock to Never for
-   the session — a plain `http` page cannot hold a wake lock.
+4. Set Auto-Lock to Never for the session — a plain `http` page cannot hold a wake lock.
+
+The browser app's own toolbar is the thing most likely to spoil the alignment: eight rows
+at 12.7 mm need about 100 mm of screen, and a toolbar can take the bottom row's worth. If
+the app has a full-screen mode, use it. Otherwise either prop the phone up about a
+centimetre so its usable screen covers the grid, or use **Fit to screen** in calibration
+and accept a slightly compressed pitch.
 
 If the browser app refuses Web MIDI over plain `http` (it is not a secure context), save
 `index.html` to the phone and open it from Files instead; everything works from a
@@ -69,6 +74,7 @@ Tap **calibrate** at the bottom right, or press and hold anywhere for about a se
 | MIDI port | Which Deluge port to talk to. Port 3 is the SysEx port and is the default. |
 | Row pitch | Height of one row. The Deluge's pads are **12.7 mm** apart (measured), which is the default; get the span of all eight right rather than judging one row. |
 | Top offset | Slides all eight rows down to meet the top pad row. Depends entirely on how the phone is propped — 70 px was right for one setup. |
+| Fit to screen | Gives up exact pad-for-pad pitch and spreads the eight rows over the height that is actually visible. Use it when a browser app's toolbar eats the bottom row: the top and bottom rows still line up, which is most of the value. The line above it says whether the rows currently fit. |
 | Text size | Scales the type without changing the row pitch. |
 | Pixels per mm | Only used to show the pitch in millimetres. Set it so the striped bar measures 100 mm against a ruler, then the pitch readout is trustworthy. |
 | Rotate 180° | For mounting the phone upside down, so the cable points away from you. Rotates the whole page, text included — an iPhone will not rotate into upside-down portrait on its own. |
