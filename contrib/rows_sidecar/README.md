@@ -71,7 +71,8 @@ Tap **calibrate** at the bottom right, or press and hold anywhere for about a se
 | Top offset | Slides all eight rows down the screen to meet the top pad row. |
 | Text size | Scales the type without changing the row pitch. |
 | Pixels per mm | Only used to show the pitch in millimetres. Set it so the striped bar measures 100 mm against a ruler, then the pitch readout is trustworthy. |
-| Flip top/bottom | If the rows come out upside down, this reverses them. |
+| Rotate 180° | For mounting the phone upside down, so the cable points away from you. Rotates the whole page, text included — an iPhone will not rotate into upside-down portrait on its own. |
+| Flip top/bottom | Reverses the row order only, leaving the text alone. For when the rows read the wrong way round but the phone is the right way up. |
 
 Values are kept in `localStorage` on that phone.
 
