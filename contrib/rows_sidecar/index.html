@@ -136,6 +136,7 @@
   <div id="ruler"></div>
 
   <div class="btns">
+    <button id="c-big">Big text: instrument</button>
     <button id="c-flip">Flip top/bottom</button>
     <button id="c-reset">Reset</button>
     <button id="c-done" class="primary">Done</button>
@@ -226,15 +227,21 @@ function paint(view) {
       ((s & ARMED) ? " armed" : "") +
       ((s & REC_ARMED) ? " recarmed" : "");
 
+    // The big line is either what the row plays or where it sits in the song; whichever
+    // one is not up top goes into the subtitle beside the type.
+    const instrument = r.n || "";
+    const section = r.c || (r.x ? "Section " + r.x : "");
+    const bigIsSection = cal.big === "section" && section;
+
     el.swatch.style.background = empty ? "" : "#" + (r.k || "666666");
-    el.name.textContent = empty ? "" : (r.n || "");
+    el.name.textContent = empty ? "" : (bigIsSection ? section : instrument);
     el.type.textContent = empty ? "" : (GLYPH[r.t] || r.t.toUpperCase());
 
     const detail = [];
     if (!empty) {
       if (!isRows) detail.push((view.layout === "grid" ? "col " : "row ") + (r.y + 1));
-      if (r.c) detail.push(r.c);
-      else if (r.x) detail.push("section " + r.x);
+      const small = bigIsSection ? instrument : section;
+      if (small) detail.push(small);
     }
     el.detail.textContent = detail.length ? " · " + detail.join(" · ") : "";
   });
@@ -244,7 +251,7 @@ function paint(view) {
 }
 
 /* -------------------------------------------------------------------- state */
-const DEFAULTS = { pitch: 77, offset: 0, scale: 1, ppm: 6.04, flip: false, port: "" };
+const DEFAULTS = { pitch: 77, offset: 0, scale: 1, ppm: 6.04, flip: false, big: "instrument", port: "" };
 let cal = { ...DEFAULTS };
 try { Object.assign(cal, JSON.parse(localStorage.getItem("delugeRowsCal") || "{}")); } catch (e) {}
 
@@ -356,6 +363,15 @@ function fillPorts() {
   };
 }
 
+const bigBtn = document.getElementById("c-big");
+function showBig() { bigBtn.textContent = "Big text: " + cal.big; }
+bigBtn.onclick = () => {
+  cal.big = cal.big === "instrument" ? "section" : "instrument";
+  showBig();
+  applyCal();
+  if (lastView) paint(lastView);
+};
+
 document.getElementById("c-flip").onclick = () => {
   cal.flip = !cal.flip;
   applyCal();
@@ -363,6 +379,7 @@ document.getElementById("c-flip").onclick = () => {
 };
 document.getElementById("c-reset").onclick = () => {
   cal = { ...DEFAULTS, port: cal.port };
+  showBig();
   for (const [id, key] of [["c-pitch", "pitch"], ["c-offset", "offset"], ["c-scale", "scale"], ["c-ppm", "ppm"]]) {
     document.getElementById(id).value = cal[key];
   }
@@ -371,6 +388,7 @@ document.getElementById("c-reset").onclick = () => {
 };
 document.getElementById("c-done").onclick = () => calEl.classList.remove("on");
 
+showBig();
 applyCal();
 start();
 </script>
