@@ -67,8 +67,8 @@ Tap **calibrate** at the bottom right, or press and hold anywhere for about a se
 | Control | What it does |
 |---|---|
 | MIDI port | Which Deluge port to talk to. Port 3 is the SysEx port and is the default. |
-| Row pitch | Height of one row. Set it to the Deluge's pad pitch so the rows line up. |
-| Top offset | Slides all eight rows down the screen to meet the top pad row. |
+| Row pitch | Height of one row. The Deluge's pads are **12.7 mm** apart (measured), which is the default; get the span of all eight right rather than judging one row. |
+| Top offset | Slides all eight rows down to meet the top pad row. Depends entirely on how the phone is propped — 70 px was right for one setup. |
 | Text size | Scales the type without changing the row pitch. |
 | Pixels per mm | Only used to show the pitch in millimetres. Set it so the striped bar measures 100 mm against a ruler, then the pitch readout is trustworthy. |
 | Rotate 180° | For mounting the phone upside down, so the cable points away from you. Rotates the whole page, text included — an iPhone will not rotate into upside-down portrait on its own. |
