@@ -17,7 +17,6 @@
 #include "model/clip/clip.h"
 #include "model/instrument/midi_instrument.h"
 #include "model/song/song.h"
-#include "playback/mode/session.h"
 #include "playback/playback_handler.h"
 #include "processing/audio_output.h"
 #include "processing/engines/audio_engine.h"
@@ -874,13 +873,28 @@ char const* viewUIName(UIType uiType) {
 	}
 }
 
-/// State bits reported as "s" for each row.
+/// State bits reported as "s" for each row. There is deliberately no record-arm bit:
+/// clips are armed for recording by default, so it would be set on nearly every row, and
+/// the Deluge itself only surfaces it while the record button is held.
 enum ViewRowState {
 	VIEW_ROW_ACTIVE = 1,
 	VIEW_ROW_SOLOED = 2,
 	VIEW_ROW_ARMED = 4,
-	VIEW_ROW_REC_ARMED = 8,
 };
+
+/// The colour that identifies this row. Tracks carry a hue in the song file, which is what
+/// the grid layout paints them with; a clip that has none falls back to the hue its pads are
+/// drawn from in the rows layout. Section colour is no use here - a song that lives in one
+/// section would render eight identical bars.
+RGB viewRowColour(Output* output, Clip* clip) {
+	if (output->colour != 0) {
+		return RGB::fromHue(output->colour);
+	}
+	if (clip) {
+		return RGB::fromHue(clip->colourOffset * -8 / 3);
+	}
+	return RGB::monochrome(160);
+}
 
 } // namespace
 
@@ -936,14 +950,13 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 
 		Clip* colourClip = clip ? clip : output->getActiveClip();
 		uint32_t section = (colourClip && colourClip->section < kMaxNumSections) ? colourClip->section : 0;
-		RGB colour = colourClip ? defaultClipSectionColours[section] : RGB::monochrome(160);
+		RGB colour = viewRowColour(output, colourClip);
 
 		uint32_t state = 0;
 		if (clip) {
 			state |= currentSong->isClipActive(clip) ? VIEW_ROW_ACTIVE : 0;
 			state |= clip->soloingInSessionMode ? VIEW_ROW_SOLOED : 0;
 			state |= (clip->armState != ArmState::OFF) ? VIEW_ROW_ARMED : 0;
-			state |= clip->armedForRecording ? VIEW_ROW_REC_ARMED : 0;
 		}
 		else {
 			bool soloed = output->soloingInArrangementMode;
@@ -951,7 +964,6 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 			if (!currentSong->anyOutputsSoloingInArrangement && !output->mutedInArrangementMode) {
 				state |= VIEW_ROW_ACTIVE;
 			}
-			state |= output->armedForRecording ? VIEW_ROW_REC_ARMED : 0;
 		}
 
 		jWriter.writeAttribute("t", viewOutputTypeName(output->type), false);
