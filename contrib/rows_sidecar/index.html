@@ -272,7 +272,7 @@ function applyCal() {
 
 /* --------------------------------------------------------------------- loop */
 const transport = new WebMidiTransport();
-let lastGen = null, lastReplyAt = 0, lastView = null;
+let lastGen = null, lastReplyAt = 0, lastView = null, polling = null;
 
 transport.onMessage = data => {
   lastReplyAt = performance.now();
@@ -303,8 +303,13 @@ function setStatus(ok, detail) {
 }
 
 function poll() {
+  // A port that vanished and came back needs picking up again; so does a Deluge that was
+  // not plugged in when the page loaded.
+  if (!transport.out) { start(); return; }
   transport.send(VIEW_REQUEST);
-  if (lastReplyAt && performance.now() - lastReplyAt > DEAD_MS) setStatus(false, "disconnected");
+  if (performance.now() - lastReplyAt > DEAD_MS) {
+    setStatus(false, lastGen === null ? "no reply from the Deluge" : "disconnected");
+  }
 }
 
 async function start() {
@@ -315,11 +320,14 @@ async function start() {
   try {
     await transport.connect();
     fillPorts();
-    setStatus(true, "connected");
+    setStatus(true, "waiting for the Deluge\u2026");
   } catch (e) {
     setStatus(false, String(e.message || e));
   }
-  setInterval(poll, POLL_MS);
+  // The first poll starts the clock, so a Deluge that never answers reads as no reply
+  // rather than sitting on "connected" forever.
+  lastReplyAt = performance.now();
+  if (!polling) polling = setInterval(poll, POLL_MS);
   poll();
 
   try { await navigator.wakeLock.request("screen"); } catch (e) {}

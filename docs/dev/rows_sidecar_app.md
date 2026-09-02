@@ -115,8 +115,8 @@ Per row:
 | `t` | string | `synth`, `kit`, `midi`, `cv`, `audio`, or `none` for an empty row. An empty row carries `y` and `t` and nothing else. |
 | `n` | string | Output display name as the OLED would show it (the user's name, or a generated one such as `MIDI 3`). |
 | `c` | string | The clip's own name. Omitted when unset, and the first thing dropped when the reply is running out of room. |
-| `k` | string | Six hex digits: the section colour, which is what the section pad column shows for that row. |
-| `s` | integer | State bits: 1 active, 2 soloing, 4 armed to launch or stop, 8 armed to record. |
+| `k` | string | Six hex digits: a colour actually present on that row of pads — the middle note row's colour for an instrument clip, the clip's own for an audio clip, the track hue in the grid layout. |
+| `s` | integer | State bits: 1 active, 2 soloing, 4 armed to launch or stop. There is deliberately no record-arm bit: clips are armed for recording by default, so it would be set on nearly every row. |
 | `x` | integer | Section number, 1-based. Omitted when the row has no clip. |
 
 Rules:

@@ -66,8 +66,10 @@ Values are kept in `localStorage` on that phone.
 
 ## What the rows mean
 
-- The colour bar is the clip's **section** colour — the same colour as the rightmost pad
-  column, which is the column nearest the phone.
+- The colour bar is a colour actually on that row of pads: the middle note row's colour
+  for an instrument clip, the clip's own for an audio clip, and the track hue the grid
+  layout paints in grid layout. Section colour would be no use — a song living in one
+  section would give you eight identical bars.
 - A green dot is playing, dim is stopped, yellow is soloing, a blinking dot is armed to
   launch or stop, red is armed to record.
 - Empty rows are a dash.
