@@ -1,6 +1,8 @@
 # Rows Sidecar App – Specification
 
-Status: draft, not yet implemented.
+Status: implemented. The firmware `view` query and the web page are in the tree; the
+wireless bridge (section 7) is still deferred. Section 4.2 describes what the firmware
+actually sends.
 
 ## 1. Summary
 
@@ -85,62 +87,56 @@ F0 00 21 7B 01 05 <seq> {"^view":{ ... }} F7
 ```
 
 ```json
-{"^view":{
-  "gen": 417,
-  "ui": "session",
-  "layout": "rows",
-  "song": "My Song",
-  "yScroll": 0,
-  "xScroll": 0,
-  "playing": true,
-  "rows": [
-    {"y":7,"type":"synth","name":"Lead Pluck","clip":"","colour":"ff8000",
-     "playing":true,"muted":false,"soloed":false,"armed":false},
-    {"y":6,"type":"kit","name":"Drums 1","clip":"Verse", ...},
-    {"y":5,"type":"none"},
-    ...
-  ]
-}}
+{"^view": { "ui": "session", "layout": "rows", "song": "Night Drive",
+"yScroll": 0, "xScroll": 0, "playing": 1,
+"rows": [{ "y": 7, "t": "synth", "n": "Lead Pluck", "k": "ff8000", "s": 1, "x": 1},
+         { "y": 6, "t": "kit", "n": "Drums 1", "c": "Verse", "k": "22aaff", "s": 1, "x": 2},
+         { "y": 5, "t": "none"}], "gen": 179159252}}
 ```
 
-Field semantics:
+Keys are short because the whole reply has to fit one SysEx frame (see the rules below);
+a full eight rows of named clips is around 600 bytes.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `gen` | integer | Generation counter, incremented whenever anything in the reply could have changed. The page repaints only when it changes. |
 | `ui` | string | Current root UI: `session`, `arranger`, `clip`, `other`. The page only renders rows for `session` and `arranger`. |
-| `layout` | string | `rows` or `grid` (session view only). Tells the page which physical axis the rows map to. |
-| `song` | string | Song name, may be empty. |
-| `yScroll` / `xScroll` | integer | Current scroll offsets, for the page to show "more above/below" hints. |
-| `playing` | boolean | Playback state. |
-| `rows` | array of 8 | One entry per pad row, `y` from 7 (top) to 0 (bottom), always present. |
-| `y` | integer | Pad row index. |
-| `type` | string | `synth`, `kit`, `midi`, `cv`, `audio`, or `none` for an empty row. Maps from `OutputType`. |
-| `name` | string | Output display name as the OLED would show it (user name, or a generated one such as `MIDI 3`). |
-| `clip` | string | The clip's own name, empty when unset. |
-| `colour` | string | Six hex digits, the colour the pad row is rendered with. |
-| `playing` | boolean | Clip is currently active/playing. |
-| `muted` | boolean | Clip is stopped (not active and not soloed). |
-| `soloed` | boolean | Clip is soloing in session mode. |
-| `armed` | boolean | Clip has a pending launch or stop. |
+| `layout` | string | `rows`, `grid` or `arranger`. Tells the page what an entry means. |
+| `song` | string | Song name, empty for an unsaved song. |
+| `yScroll` / `xScroll` | integer | Current scroll offsets. `xScroll` is only meaningful in the grid layout. |
+| `playing` | 0/1 | Whether a clock is running. |
+| `rows` | array of 8 | One entry per row, in the order the page should display them: topmost pad row first. |
+| `gen` | integer | FNV-1a hash of everything else in the reply. The page repaints only when it changes, so no firmware state has to track staleness. |
+
+Per row:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `y` | integer | Pad row index, 7 at the top down to 0. In the grid layout it is the track column index instead, counting from the left. |
+| `t` | string | `synth`, `kit`, `midi`, `cv`, `audio`, or `none` for an empty row. An empty row carries `y` and `t` and nothing else. |
+| `n` | string | Output display name as the OLED would show it (the user's name, or a generated one such as `MIDI 3`). |
+| `c` | string | The clip's own name. Omitted when unset, and the first thing dropped when the reply is running out of room. |
+| `k` | string | Six hex digits: the section colour, which is what the section pad column shows for that row. |
+| `s` | integer | State bits: 1 active, 2 soloing, 4 armed to launch or stop, 8 armed to record. |
+| `x` | integer | Section number, 1-based. Omitted when the row has no clip. |
 
 Rules:
 
-- The reply must be **7-bit clean**. Names are user text and the Deluge allows
-  characters outside ASCII; the handler escapes any byte with the high bit set as
-  `\u00XX` and escapes `"` and `\` per JSON. Nothing in the reply may be `F7`.
-- Rows are always eight entries so the page can index by `y` without bounds checks.
-- In the **grid layout** the eight pad rows correspond to clips within the visible
-  tracks rather than to tracks. The first version reports the track (column) under
-  each of the leftmost eight columns as `rows[]` and sets `layout` to `grid`, so
-  the phone can be laid along the top edge in landscape. A later version may add a
-  `cols` array instead.
-- In the **arranger** each row is an output; `clip` is empty and play state reflects
-  the output's mute/solo state.
-- In **clip view** or any other UI, `rows` is still present but every entry has
-  `type: "none"`, and `ui` tells the page why.
-- Reply size is roughly 600 to 900 bytes, well within what the existing file API
-  already sends per message.
+- The reply is **7-bit clean**. Names are user text and the Deluge allows characters
+  outside ASCII; the handler escapes any byte with the high bit set as `\u00XX`, escapes
+  `"` and `\`, and so can never put an `F7` or an 8-bit byte inside the frame.
+- The reply is capped at 740 bytes so it fits inside one 752-byte frame, which is as far
+  as some host MIDI stacks are dependably transparent (see the byte-750 CoreMIDI bug).
+  The cap is enforced by shrinking text: each row gets a share of what is left, the clip
+  name goes before the output name does, and a name is truncated rather than dropped.
+- Rows are always eight entries so the page can index by position without bounds checks.
+- In the **grid layout** the eight pad rows are sections, not tracks, so the query
+  reports the eight leftmost track columns instead and sets `layout` to `grid`. `y` is
+  then the column index and `c` is absent.
+- In the **arranger** each entry is an output; `c` is absent and the state bits reflect
+  the output's arrangement mute/solo state.
+- In **clip view** or any other UI, `rows` is still present but every entry is
+  `{"y": n, "t": "none"}`, and `ui` says why. The page holds its last good picture and
+  greys it out rather than blanking.
 
 ### 4.3 Implementation notes
 
@@ -149,13 +145,14 @@ Rules:
 - Build the reply with the existing `JsonSerializer` (`startReply`,
   `writeOpeningTag("^view", ...)`, `writeAttribute`, `writeArrayStart("rows", ...)`,
   `sendMsg`) exactly as the file handlers do.
-- Row resolution reuses `sessionView.getClipOnScreen(y)` and
-  `View::displayOutputName` logic (factor the name-derivation into a helper that
-  writes into a `String` rather than to the display).
-- `gen` is a global counter bumped from the same places that mark the session
-  view's grid rows for redraw (scroll, layout change, clip launch state change,
-  rename, song load). If that proves too invasive, the first version can bump it
-  every time `sendView` runs and let the page compare the row payload instead.
+- Row resolution goes through `SessionView::getViewQueryRow`, which covers both session
+  layouts (`getClipOnScreen` returns nothing in the grid layout unless a pad is held).
+  Name derivation is a small local helper mirroring the name half of
+  `View::drawOutputNameFromDetails`; sharing that code properly would mean splitting the
+  display work out of it, which is a bigger change than this query justifies.
+- `gen` is written last so it can be an FNV-1a hash of the payload in front of it. That
+  needs no hooks anywhere else in the firmware and changes exactly when the reply's
+  content changes.
 - The handler runs in the `handleNextSysEx` task, which already avoids running
   while the SD card is in use. It must not run from the USB receive callback.
 - Rate limiting: the page polls at 4 to 5 Hz. No firmware throttle is needed at
@@ -289,26 +286,34 @@ rendering code.
 ```
 docs/dev/rows_sidecar_app.md          this document
 src/deluge/storage/smsysex.cpp        `view` handler
+src/deluge/gui/views/session_view.cpp getViewQueryRow, the row lookup it uses
 contrib/rows_sidecar/index.html       single-file page
 contrib/rows_sidecar/README.md        setup and calibration notes
+contrib/rows_sidecar/serve.py         local HTTP server, for loading the page on a phone
 contrib/rows_sidecar/bridge/          CircuitPython bridge scripts (deferred)
+.claude/skills/deluge-flash/hw_view.py  command-line probe for the query
 ```
 
 ## 10. Open questions
 
-- Should `gen` be a real change counter, or is a per-reply counter plus payload
-  comparison in the page good enough for the first version?
-- Grid layout: report tracks along the top edge (current plan) or the clips of one
-  selected track down the side?
-- Where should the output display-name derivation live so both the OLED code and
-  the `view` handler share it without duplicating `drawOutputNameFromDetails`?
-- Does the Web MIDI Browser app on iOS pass SysEx of 900 bytes intact? Needs a test
-  before trusting evaluation results.
+- Grid layout: tracks along the top edge (what is implemented) or the clips of one
+  selected track down the side? Undecided until the grid layout is actually used
+  with the display.
+- Where should the output display-name derivation live so both the OLED code and the
+  `view` handler share it without duplicating `drawOutputNameFromDetails`? For now the
+  handler has its own small copy.
+- Does the Web MIDI Browser app on iOS pass a ~700 byte SysEx intact? The 740-byte cap
+  makes this likely, but it is untested.
+
+Settled:
+
+- `gen` is a hash of the payload, not a change counter (section 4.3).
 
 ## 11. Milestones
 
-1. Firmware `view` query, verified from a desktop browser.
-2. Page over Web MIDI with calibration, verified on the desktop.
-3. Wired iPhone evaluation.
+1. ~~Firmware `view` query, verified from a desktop browser.~~ Done; `hw_view.py` is the
+   command-line probe.
+2. ~~Page over Web MIDI with calibration.~~ Done.
+3. Wired iPhone evaluation. ← here
 4. Decision point: build a bridge or stop.
 5. Bridge, push mode, and extensions as warranted.
