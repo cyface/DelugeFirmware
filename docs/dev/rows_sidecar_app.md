@@ -94,15 +94,26 @@ F0 00 21 7B 01 05 <seq> {"^view":{ ... }} F7
          { "y": 5, "t": "none"}], "gen": 179159252}}
 ```
 
+In the kit editor, with the row type left to the reader:
+
+```json
+{"^view": { "ui": "clip", "layout": "kit", "song": "Night Drive", "inst": "000 TR-808",
+"yScroll": 0, "xScroll": 0, "playing": 0,
+"rows": [{ "y": 7, "n": "808 Clap", "k": "0043bc", "s": 1, "x": 8},
+         { "y": 1, "n": "808 Snare", "k": "da2500", "s": 9, "x": 2},
+         { "y": 0, "n": "808 Kick", "k": "ff0000", "s": 25, "x": 1}], "gen": 584935934}}
+```
+
 Keys are short because the whole reply has to fit one SysEx frame (see the rules below);
 a full eight rows of named clips is around 600 bytes.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `ui` | string | Current root UI: `session`, `arranger`, `clip`, `other`. The page only renders rows for `session` and `arranger`. |
-| `layout` | string | `rows`, `grid` or `arranger`. Tells the page what an entry means. |
+| `ui` | string | Current root UI: `session`, `arranger`, `clip` (an instrument clip), `audio`, `keyboard`, `automation`, `other`. Rows are only filled in for `session`, `arranger` and `clip`; the rest name the screen so the page can say why it is greyed. |
+| `layout` | string | What an entry means: `rows`, `grid`, `arranger`, `kit` or `notes`. |
 | `song` | string | Song name, empty for an unsaved song. |
-| `yScroll` / `xScroll` | integer | Current scroll offsets. `xScroll` is only meaningful in the grid layout. |
+| `inst` | string | The instrument the rows belong to. Only in the clip editor. |
+| `yScroll` / `xScroll` | integer | Current scroll offsets — the clip's own in the clip editor. `xScroll` is only meaningful in the grid layout. |
 | `playing` | 0/1 | Whether a clock is running. |
 | `rows` | array of 8 | One entry per row, in the order the page should display them: topmost pad row first. |
 | `gen` | integer | FNV-1a hash of everything else in the reply. The page repaints only when it changes, so no firmware state has to track staleness. |
@@ -112,12 +123,12 @@ Per row:
 | Field | Type | Meaning |
 |---|---|---|
 | `y` | integer | Pad row index, 7 at the top down to 0. In the grid layout it is the track column index instead, counting from the left. |
-| `t` | string | `synth`, `kit`, `midi`, `cv`, `audio`, or `none` for an empty row. An empty row carries `y` and `t` and nothing else. |
-| `n` | string | Output display name as the OLED would show it (the user's name, or a generated one such as `MIDI 3`). |
-| `c` | string | The clip's own name. Omitted when unset, and the first thing dropped when the reply is running out of room. |
-| `k` | string | Six hex digits: a colour actually present on that row of pads — the middle note row's colour for an instrument clip, the clip's own for an audio clip, the track hue in the grid layout. |
-| `s` | integer | State bits: 1 active, 2 soloing, 4 armed to launch or stop. There is deliberately no record-arm bit: clips are armed for recording by default, so it would be set on nearly every row. |
-| `x` | integer | Section number, 1-based. Omitted when the row has no clip. |
+| `t` | string | In the song: `synth`, `kit`, `midi`, `cv`, `audio`, or `none` for an empty row, which carries `y` and `t` and nothing else. In the clip editor: `midi`, `gate` or `empty` for the odd kit row, `none` for a pad row the kit does not reach, and **absent** for the overwhelmingly common case — a sample or synth row of a kit (`drum`) and any row of a melodic clip (`note`). Eleven bytes on every row is a name's worth of the reply, so the reader defaults it from `layout`. |
+| `n` | string | What the row is called. In the song, the output name as the OLED would show it. In a kit, the drum's name, else the file name of the first sample it plays with folder and extension stripped, else `Row N`. In a melodic clip, the note. |
+| `c` | string | Subtitle. In the song, the clip's own name. In a kit, where a MIDI or gate row points (`CH3 N36`, `GATE 2`); a sound row has none, since it is either named or already showing its sample. Omitted when unset or when fewer than eight characters of it would fit. |
+| `k` | string | Six hex digits: a colour actually present on that row of pads — the middle note row's colour for a clip in the song, the row's own colour in the clip editor, the track hue in the grid layout. |
+| `s` | integer | State bits. In the song: 1 active, 2 soloing, 4 armed to launch or stop. There is deliberately no record-arm bit: clips are armed for recording by default, so it would be set on nearly every row. In the clip editor: 1 unmuted, 8 has notes in this clip, 16 is the row the gold knobs and menus are pointed at. |
+| `x` | integer | In the song, the section number, 1-based, omitted when the row has no clip. In the clip editor, the row's 1-based index within the kit, omitted when the clip has no row for that pad — which is also how the page tells a real note row from a pad that is merely playable. |
 
 Rules:
 
@@ -126,17 +137,25 @@ Rules:
   `"` and `\`, and so can never put an `F7` or an 8-bit byte inside the frame.
 - The reply is capped at 740 bytes so it fits inside one 752-byte frame, which is as far
   as some host MIDI stacks are dependably transparent (see the byte-750 CoreMIDI bug).
-  The cap is enforced by shrinking text: each row gets a share of what is left, the clip
-  name goes before the output name does, and a name is truncated rather than dropped.
+  The cap is enforced by shrinking text: **each row gets an equal share of whatever budget
+  is left when its turn comes**, so a long name near the top cannot starve the bottom rows,
+  and a row that uses less than its share leaves the rest to the ones below it. Subtitles go
+  before names do, and are dropped outright rather than truncated to a stub.
 - Rows are always eight entries so the page can index by position without bounds checks.
 - In the **grid layout** the eight pad rows are sections, not tracks, so the query
   reports the eight leftmost track columns instead and sets `layout` to `grid`. `y` is
   then the column index and `c` is absent.
 - In the **arranger** each entry is an output; `c` is absent and the state bits reflect
   the output's arrangement mute/solo state.
-- In **clip view** or any other UI, `rows` is still present but every entry is
-  `{"y": n, "t": "none"}`, and `ui` says why. The page holds its last good picture and
-  greys it out rather than blanking.
+- In the **clip editor** (`ui` = `clip`) the eight entries are the clip's note rows,
+  scrolled by the clip's own `yScroll`. `layout` is `kit` when the output is a kit and
+  `notes` otherwise. A kit reports only the rows it has, so a pad row past the end of the
+  kit is `none`; a melodic clip reports all eight pads, since a pad is a playable note
+  whether or not the clip has a row for it, and the absence of `x` marks those.
+- On the **keyboard screen**, in an **audio clip**, in the **automation view** or any other
+  UI, `rows` is still present but every entry is `{"y": n, "t": "none"}`, and `ui` names the
+  screen. The page holds its last good picture and greys it out rather than blanking. Those
+  three are excluded deliberately: none of them lays the pads out as the clip's note rows.
 
 ### 4.3 Implementation notes
 
@@ -147,6 +166,12 @@ Rules:
   `sendMsg`) exactly as the file handlers do.
 - Row resolution goes through `SessionView::getViewQueryRow`, which covers both session
   layouts (`getClipOnScreen` returns nothing in the grid layout unless a pad is held).
+  Clip rows go through `InstrumentClip::getNoteRowOnScreen`, which is already public and
+  already handles both the kit and the melodic case, so nothing new was needed there.
+- Kit row names cost more work than they look: most kits do not name their rows, and the
+  factory ones carry no `<name>` tags whatsoever, so a drum with no name falls back to the
+  leaf of the first sample its `SAMPLE` or `WAVETABLE` source holds. Without that fallback
+  every row of a stock kit comes back blank, which is the case the whole feature is for.
   Name derivation is a small local helper mirroring the name half of
   `View::drawOutputNameFromDetails`; sharing that code properly would mean splitting the
   display work out of it, which is a bigger change than this query justifies.
@@ -213,6 +238,10 @@ is a byte relay or a JSON cache and knows nothing about rows.
 - Empty rows render dim with no text.
 - In `grid` layout or `arranger` the row semantics change; the page shows a small
   label naming the current layout so the user knows what the rows mean.
+- In `kit` or `notes` the name is the only thing worth the big line, so the section/name
+  toggle does not apply; the subtitle carries the row number within the kit. The selected
+  row is highlighted, a row with nothing recorded on it fades its colour bar, and a melodic
+  pad the clip has no row for is dimmed right down.
 - When `ui` is not `session` or `arranger`, dim the rows and show the UI name.
 
 ### 5.4 Alignment
@@ -328,6 +357,11 @@ rendering code.
 
 ## 8. Later extensions
 
+- ~~Kit row names in the kit editor.~~ Done 2026-09-02: the clip editor reports the clip's
+  own note rows, as `layout` `kit` or `notes`.
+- The automation view. Left out for now because its pads are not the clip's note rows in
+  every mode, so "the eight rows" would mean something different depending on where you are
+  in it - worth doing only once that is pinned down.
 - Tempo from MIDI clock: computed in the page with no firmware change.
 - OLED mirror pane using the existing `HID` SysEx stream from `hid_sysex.cpp`.
 - Current section and song position.

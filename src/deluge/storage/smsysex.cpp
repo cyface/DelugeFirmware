@@ -17,15 +17,24 @@
 #include "model/clip/audio_clip.h"
 #include "model/clip/clip.h"
 #include "model/clip/instrument_clip.h"
+#include "model/drum/drum.h"
+#include "model/drum/gate_drum.h"
+#include "model/drum/midi_drum.h"
+#include "model/instrument/instrument.h"
+#include "model/instrument/kit.h"
 #include "model/instrument/midi_instrument.h"
 #include "model/note/note_row.h"
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
 #include "processing/audio_output.h"
 #include "processing/engines/audio_engine.h"
+#include "processing/sound/sound_drum.h"
 #include "scheduler_api.h"
+#include "storage/audio/audio_file_holder.h"
+#include "storage/multi_range/multi_range.h"
 #include "util/containers.h"
 #include "util/d_stringbuf.h"
+#include "util/functions.h"
 #include "util/pack.h"
 #include <cstring>
 
@@ -775,10 +784,15 @@ namespace {
 const uint32_t kMaxViewNameChars = 28;
 /// Hosts are only dependably transparent up to a 752 byte frame, so stay under that.
 const int32_t kMaxViewReplyBytes = 740;
-/// What a row with no text at all costs, including the comma before it.
-const int32_t kMinViewRowBytes = 46;
+/// What the longest textless row costs, including the comma before it. It has to be an upper
+/// bound on that, not an average: it is what the budget below reserves for the rows not yet
+/// written, so underestimating it lets the early rows overrun the whole reply.
+const int32_t kMinViewRowBytes = 54;
 /// Room kept for "gen", the closing braces and the 0xF7.
-const int32_t kViewReplyTailBytes = 26;
+const int32_t kViewReplyTailBytes = 32;
+/// A subtitle is a luxury next to the name, and a two-character stub of one is worse than none:
+/// below this many characters it is dropped and its budget goes to the rows underneath.
+const int32_t kMinViewSubtitleChars = 8;
 
 /// Copies up to `maxChars` characters of `src` into `dest` as 7-bit clean JSON string content.
 /// Bytes with the high bit set become \u00XX, so a name using the Deluge's extended characters
@@ -867,10 +881,15 @@ char const* viewUIName(UIType uiType) {
 	case UIType::ARRANGER:
 		return "arranger";
 	case UIType::INSTRUMENT_CLIP:
-	case UIType::AUDIO_CLIP:
-	case UIType::KEYBOARD_SCREEN:
-	case UIType::AUTOMATION:
 		return "clip";
+	// Named apart from the instrument clip view because none of them puts the clip's note rows
+	// on the pads, so the reply carries no rows and the page has to say why.
+	case UIType::AUDIO_CLIP:
+		return "audio";
+	case UIType::KEYBOARD_SCREEN:
+		return "keyboard";
+	case UIType::AUTOMATION:
+		return "automation";
 	default:
 		return "other";
 	}
@@ -883,6 +902,10 @@ enum ViewRowState {
 	VIEW_ROW_ACTIVE = 1,
 	VIEW_ROW_SOLOED = 2,
 	VIEW_ROW_ARMED = 4,
+	/// Clip rows only: this row has notes in the clip currently on screen.
+	VIEW_ROW_NOTES = 8,
+	/// Clip rows only: the row the gold knobs and the menus are pointed at.
+	VIEW_ROW_SELECTED = 16,
 };
 
 /// A colour actually present on that row of pads. The grid paints a track with the hue
@@ -917,11 +940,187 @@ RGB viewRowColour(Output* output, Clip* clip, bool gridLayout) {
 	return RGB::monochrome(160);
 }
 
+/// The file name of the first sample a drum plays, with its folder and extension stripped:
+/// "808 Kick" out of "SAMPLES/DRUMS/Kick/808 Kick.wav". Stock kits carry no drum names at all
+/// - the name attribute is simply absent from the XML - so without this every row of a factory
+/// kit would come back blank. `buffer` must hold `bufferSize` bytes.
+char const* viewDrumSampleName(SoundDrum* drum, char* buffer, uint32_t bufferSize) {
+	for (int32_t s = 0; s < kNumSources; s++) {
+		Source* source = &drum->sources[s];
+		// Only these two osc types keep AudioFileHolders in their ranges.
+		if (source->oscType != OscType::SAMPLE && source->oscType != OscType::WAVETABLE) {
+			continue;
+		}
+		if (source->ranges.getNumElements() == 0) {
+			continue;
+		}
+		AudioFileHolder* holder = source->ranges.getElement(0)->getAudioFileHolder();
+		if (!holder) {
+			continue;
+		}
+		char const* path = holder->filePath.get();
+		if (!path || !*path) {
+			continue;
+		}
+		char const* leaf = strrchr(path, '/');
+		leaf = leaf ? leaf + 1 : path;
+		uint32_t length = strlen(leaf);
+		char const* dot = strrchr(leaf, '.');
+		if (dot && dot != leaf) {
+			length = (uint32_t)(dot - leaf);
+		}
+		if (length >= bufferSize) {
+			length = bufferSize - 1;
+		}
+		memcpy(buffer, leaf, length);
+		buffer[length] = 0;
+		return buffer;
+	}
+	return nullptr;
+}
+
+/// What to call one kit row: the user's drum name, else the sample it plays, else its number,
+/// which is at least something to count from. `buffer` must hold `bufferSize` bytes.
+char const* viewDrumName(Drum* drum, int32_t rowNumber, char* buffer, uint32_t bufferSize) {
+	if (drum) {
+		if (!drum->drumName.empty()) {
+			return drum->drumName.c_str();
+		}
+		if (drum->type == DrumType::SOUND) {
+			char const* sampleName = viewDrumSampleName((SoundDrum*)drum, buffer, bufferSize);
+			if (sampleName) {
+				return sampleName;
+			}
+		}
+	}
+	memcpy(buffer, "Row ", 4);
+	intToString(rowNumber, &buffer[4]);
+	return buffer;
+}
+
+/// The subtitle for a kit row: where a non-audio drum is pointed, which is the only thing about
+/// one worth knowing at a glance. A sound drum gets none - either it is named, in which case
+/// that is what the Deluge itself calls the row, or the sample name is already up top - and
+/// eight rows of name plus sample would not fit in one reply anyway.
+char const* viewDrumDetail(Drum* drum, char* buffer, uint32_t bufferSize) {
+	if (!drum) {
+		return nullptr;
+	}
+	switch (drum->type) {
+	case DrumType::SOUND:
+		return nullptr;
+
+	case DrumType::MIDI: {
+		auto* midiDrum = (MIDIDrum*)drum;
+		memcpy(buffer, "CH", 2);
+		intToString(midiDrum->channel + 1, &buffer[2]);
+		uint32_t written = strlen(buffer);
+		memcpy(&buffer[written], " N", 2);
+		intToString(midiDrum->note, &buffer[written + 2]);
+		return buffer;
+	}
+
+	case DrumType::GATE:
+		memcpy(buffer, "GATE ", 5);
+		intToString(((GateDrum*)drum)->channel + 1, &buffer[5]);
+		return buffer;
+	}
+	return nullptr;
+}
+
+char const* viewDrumTypeName(Drum* drum) {
+	if (!drum) {
+		return "empty";
+	}
+	switch (drum->type) {
+	case DrumType::MIDI:
+		return "midi";
+	case DrumType::GATE:
+		return "gate";
+	default:
+		return "drum";
+	}
+}
+
+/// One row of the clip editor. In a kit that is a drum; in a melodic clip it is a note, which
+/// exists as a pad row whether or not the clip has a NoteRow for it. Both are scrolled by the
+/// clip's own yScroll rather than the song's, so neither goes through the session view.
+void writeViewClipRow(InstrumentClip* clip, bool isKit, int32_t y, int32_t textRoom) {
+	char escaped[kMaxViewNameChars * 6 + 2];
+	char generated[kMaxViewNameChars + 8];
+	char detail[kMaxViewNameChars + 8];
+
+	int32_t noteRowIndex = 0;
+	NoteRow* noteRow = clip->getNoteRowOnScreen(y, currentSong, &noteRowIndex);
+
+	jWriter.writeAttribute("y", y, false);
+
+	// A kit shows only the rows it has; a melodic clip's pads are notes either way.
+	if (isKit && !noteRow) {
+		jWriter.writeAttribute("t", "none", false);
+		return;
+	}
+
+	Drum* drum = noteRow ? noteRow->drum : nullptr;
+	int32_t yNote = clip->getYNoteFromYDisplay(y, currentSong);
+	int8_t colourOffset = noteRow ? noteRow->getColourOffset(clip) : 0;
+	RGB colour = clip->getMainColourFromY(yNote, colourOffset);
+
+	uint32_t state = 0;
+	if (noteRow) {
+		state |= noteRow->muted ? 0 : VIEW_ROW_ACTIVE;
+		state |= noteRow->hasNoNotes() ? 0 : VIEW_ROW_NOTES;
+	}
+
+	char const* name;
+	char const* extra = nullptr;
+	if (isKit) {
+		auto* kit = (Kit*)clip->output;
+		state |= (drum && kit->selectedDrum == drum) ? VIEW_ROW_SELECTED : 0;
+		name = viewDrumName(drum, noteRowIndex + 1, generated, sizeof(generated));
+		extra = viewDrumDetail(drum, detail, sizeof(detail));
+		// "drum" is what a kit row is unless it says otherwise, and eleven bytes on every row
+		// is a name's worth of the reply, so the common case is left for the reader to fill in.
+		char const* typeName = viewDrumTypeName(drum);
+		if (strcmp(typeName, "drum") != 0) {
+			jWriter.writeAttribute("t", typeName, false);
+		}
+	}
+	else {
+		noteCodeToString(yNote, generated);
+		name = generated;
+		// Likewise every row of a melodic clip is a note.
+	}
+
+	uint32_t nameChars = std::min<int32_t>(std::max<int32_t>(textRoom, 0), kMaxViewNameChars);
+	escapeForJson(name, escaped, nameChars);
+	jWriter.writeAttribute("n", escaped, false);
+
+	if (extra && *extra) {
+		int32_t extraRoom = textRoom - (int32_t)strlen(escaped) - 8;
+		int32_t extraChars = std::min<int32_t>(extraRoom, kMaxViewNameChars);
+		if (extraChars >= kMinViewSubtitleChars) {
+			escapeForJson(extra, escaped, extraChars);
+			jWriter.writeAttribute("c", escaped, false);
+		}
+	}
+
+	intToHex(colour.r, &escaped[0], 2);
+	intToHex(colour.g, &escaped[2], 2);
+	intToHex(colour.b, &escaped[4], 2);
+	jWriter.writeAttribute("k", escaped, false);
+	jWriter.writeAttribute("s", (int32_t)state, false);
+	if (noteRow) {
+		// Which row of the kit this is, so a scrolled kit still says where you are in it.
+		jWriter.writeAttribute("x", noteRowIndex + 1, false);
+	}
+}
+
 } // namespace
 
 void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 	char escaped[kMaxViewNameChars * 6 + 2];
-	char generated[16];
+	char generated[kMaxViewNameChars + 8];
 
 	UI* rootUI = getRootUI();
 	UIType uiType = rootUI ? rootUI->getUIType() : UIType::NONE;
@@ -929,15 +1128,46 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 	bool isArranger = (uiType == UIType::ARRANGER);
 	bool isGrid = isSession && currentSong->sessionLayout == SessionLayoutType::SessionLayoutTypeGrid;
 
+	// In the clip editor the pad rows are the clip's note rows, not the song's tracks. Only the
+	// instrument clip view is reported: the keyboard screen lays its pads out by pitch, and the
+	// automation view puts parameters on them.
+	InstrumentClip* clipUnderEdit = nullptr;
+	if (uiType == UIType::INSTRUMENT_CLIP) {
+		Clip* currentClip = currentSong->getCurrentClip();
+		if (currentClip && currentClip->type == ClipType::INSTRUMENT) {
+			clipUnderEdit = (InstrumentClip*)currentClip;
+		}
+	}
+	bool isKit = clipUnderEdit && clipUnderEdit->output && clipUnderEdit->output->type == OutputType::KIT;
+
+	char const* layout = "rows";
+	if (clipUnderEdit) {
+		layout = isKit ? "kit" : "notes";
+	}
+	else if (isArranger) {
+		layout = "arranger";
+	}
+	else if (isGrid) {
+		layout = "grid";
+	}
+
 	startReply(jWriter, reader);
 	jWriter.writeOpeningTag("^view", false, true);
 	jWriter.writeAttribute("ui", viewUIName(uiType), false);
-	jWriter.writeAttribute("layout", isArranger ? "arranger" : (isGrid ? "grid" : "rows"), false);
+	jWriter.writeAttribute("layout", layout, false);
 	escapeForJson(currentSong->name.get(), escaped, kMaxViewNameChars);
 	jWriter.writeAttribute("song", escaped, false);
+	if (clipUnderEdit && clipUnderEdit->output) {
+		// Which kit or synth the rows below belong to - the song name alone is no help once
+		// you are inside a clip.
+		escapeForJson(viewOutputName(clipUnderEdit->output, generated), escaped, kMaxViewNameChars);
+		jWriter.writeAttribute("inst", escaped, false);
+	}
 	jWriter.writeAttribute("yScroll",
-	                       isArranger ? currentSong->arrangementYScroll
-	                                  : (isGrid ? currentSong->songGridScrollY : currentSong->songViewYScroll),
+	                       clipUnderEdit ? clipUnderEdit->yScroll
+	                       : isArranger  ? currentSong->arrangementYScroll
+	                       : isGrid      ? currentSong->songGridScrollY
+	                                     : currentSong->songViewYScroll,
 	                       false);
 	jWriter.writeAttribute("xScroll", isGrid ? currentSong->songGridScrollX : 0, false);
 	jWriter.writeAttribute("playing", playbackHandler.isEitherClockActive() ? 1 : 0, false);
@@ -947,8 +1177,20 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 		// Topmost pad row first, so the page can render the array straight down the screen.
 		int32_t y = kDisplayHeight - 1 - index;
 		int32_t rowsLeft = kDisplayHeight - index;
-		int32_t room =
-		    kMaxViewReplyBytes - jWriter.bytesWritten() - kViewReplyTailBytes - (rowsLeft - 1) * kMinViewRowBytes;
+
+		// Every row gets an equal share of the text budget that is left, so a long name near the
+		// top cannot starve the bottom rows into blanks; a row that uses less than its share
+		// leaves the rest to the ones below it.
+		int32_t spare = kMaxViewReplyBytes - jWriter.bytesWritten() - kViewReplyTailBytes - rowsLeft * kMinViewRowBytes;
+		int32_t textRoom = (spare > 0) ? spare / rowsLeft : 0;
+
+		jWriter.writeOpeningTag(nullptr, false, false);
+
+		if (clipUnderEdit) {
+			writeViewClipRow(clipUnderEdit, isKit, y, textRoom);
+			jWriter.closeTag();
+			continue;
+		}
 
 		Output* output = nullptr;
 		Clip* clip = nullptr;
@@ -960,7 +1202,6 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 			output = arrangerView.outputsOnScreen[y];
 		}
 
-		jWriter.writeOpeningTag(nullptr, false, false);
 		jWriter.writeAttribute("y", isGrid ? index : y, false);
 
 		if (!output) {
@@ -990,7 +1231,6 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 		jWriter.writeAttribute("t", viewOutputTypeName(output->type), false);
 
 		char const* name = viewOutputName(output, generated);
-		int32_t textRoom = room - kMinViewRowBytes;
 		uint32_t nameChars = std::min<int32_t>(std::max<int32_t>(textRoom, 0), kMaxViewNameChars);
 		escapeForJson(name, escaped, nameChars);
 		jWriter.writeAttribute("n", escaped, false);
@@ -1000,8 +1240,8 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 		char const* clipName = clip ? clip->name.get() : "";
 		if (*clipName) {
 			int32_t clipRoom = textRoom - (int32_t)strlen(escaped) - 8;
-			uint32_t clipChars = std::min<int32_t>(std::max<int32_t>(clipRoom, 0), kMaxViewNameChars);
-			if (clipChars > 0) {
+			int32_t clipChars = std::min<int32_t>(clipRoom, kMaxViewNameChars);
+			if (clipChars >= kMinViewSubtitleChars) {
 				escapeForJson(clipName, escaped, clipChars);
 				jWriter.writeAttribute("c", escaped, false);
 			}
