@@ -22,6 +22,7 @@
     background: var(--bg); color: var(--fg);
     font: 500 16px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
     -webkit-user-select: none; user-select: none; -webkit-text-size-adjust: none;
+    -webkit-touch-callout: none; touch-action: manipulation;
   }
 
   /* ---- the eight rows -------------------------------------------------- */
@@ -80,7 +81,12 @@
   #led { width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; flex: none; }
   #led.ok { background: #2ee66b; }
   #bar b { color: #a0a0a0; font-weight: 600; }
-  #note { margin-left: auto; text-align: right; }
+  /* a real tap target, not just a hint: the long press is easy to miss */
+  #note {
+    margin-left: auto; padding: 6px 10px; margin: -6px -4px -6px auto;
+    border: 1px solid #262626; border-radius: 8px; color: #8d8d8d;
+  }
+  #note:active { background: #1a1a1a; }
 
   /* ---- calibration ----------------------------------------------------- */
   #cal {
@@ -112,7 +118,7 @@
 <div id="bar">
   <span id="led"></span><b id="conn">connecting…</b>
   <span id="song"></span>
-  <span id="note">hold to calibrate</span>
+  <span id="note">calibrate</span>
 </div>
 
 <div id="cal">
@@ -337,13 +343,30 @@ async function start() {
 const calEl = document.getElementById("cal");
 let holdTimer = null;
 
-document.body.addEventListener("pointerdown", () => {
+// A long press anywhere opens calibration. Fingers wobble, so only real movement
+// cancels it - cancelling on any pointermove at all made the press unusable on a phone.
+let holdFrom = null;
+
+document.body.addEventListener("pointerdown", e => {
   if (calEl.classList.contains("on")) return;
-  holdTimer = setTimeout(() => calEl.classList.add("on"), 700);
+  holdFrom = { x: e.clientX, y: e.clientY };
+  holdTimer = setTimeout(() => calEl.classList.add("on"), 600);
 });
-for (const ev of ["pointerup", "pointercancel", "pointermove"]) {
+document.body.addEventListener("pointermove", e => {
+  if (holdFrom && Math.hypot(e.clientX - holdFrom.x, e.clientY - holdFrom.y) > 14) {
+    clearTimeout(holdTimer);
+  }
+});
+for (const ev of ["pointerup", "pointercancel"]) {
   document.body.addEventListener(ev, () => clearTimeout(holdTimer));
 }
+
+// ...and so does a plain tap on the hint, which is the discoverable way in.
+document.getElementById("note").addEventListener("pointerup", e => {
+  clearTimeout(holdTimer);
+  e.stopPropagation();
+  calEl.classList.add("on");
+});
 
 function bindSlider(id, key, parse) {
   const el = document.getElementById(id);

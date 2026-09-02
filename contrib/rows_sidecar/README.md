@@ -62,7 +62,7 @@ If the browser app refuses Web MIDI over plain `http` (it is not a secure contex
 
 ## Calibration
 
-Press and hold anywhere for about a second.
+Tap **calibrate** at the bottom right, or press and hold anywhere for about a second.
 
 | Control | What it does |
 |---|---|
