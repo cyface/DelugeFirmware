@@ -14,8 +14,11 @@
 #include "io/midi/midi_engine.h"
 #include "io/midi/sysex.h"
 #include "memory/general_memory_allocator.h"
+#include "model/clip/audio_clip.h"
 #include "model/clip/clip.h"
+#include "model/clip/instrument_clip.h"
 #include "model/instrument/midi_instrument.h"
+#include "model/note/note_row.h"
 #include "model/song/song.h"
 #include "playback/playback_handler.h"
 #include "processing/audio_output.h"
@@ -882,16 +885,34 @@ enum ViewRowState {
 	VIEW_ROW_ARMED = 4,
 };
 
-/// The colour that identifies this row. Tracks carry a hue in the song file, which is what
-/// the grid layout paints them with; a clip that has none falls back to the hue its pads are
-/// drawn from in the rows layout. Section colour is no use here - a song that lives in one
-/// section would render eight identical bars.
-RGB viewRowColour(Output* output, Clip* clip) {
-	if (output->colour != 0) {
+/// A colour actually present on that row of pads. The grid paints a track with the hue
+/// stored for it in the song; the rows layout paints a clip from its own colour offset and
+/// the pitch of its note rows, so pick the middle note row as the representative one - a row
+/// of pads is several hues at once and any single answer is an approximation. Section colour
+/// is no use here: a song living in one section would render eight identical bars.
+RGB viewRowColour(Output* output, Clip* clip, bool gridLayout) {
+	if (gridLayout && output->colour != 0) {
 		return RGB::fromHue(output->colour);
 	}
-	if (clip) {
-		return RGB::fromHue(clip->colourOffset * -8 / 3);
+
+	if (clip && clip->type == ClipType::AUDIO) {
+		return ((AudioClip*)clip)->getColour();
+	}
+
+	if (clip && clip->type == ClipType::INSTRUMENT) {
+		auto* instrumentClip = (InstrumentClip*)clip;
+		int32_t numNoteRows = instrumentClip->noteRows.getNumElements();
+		if (numNoteRows > 0) {
+			NoteRow* noteRow = instrumentClip->noteRows.getElement(numNoteRows / 2);
+			// A kit's rows are coloured by row index, a melodic clip's by note.
+			int32_t yNote = (output->type == OutputType::KIT) ? numNoteRows / 2 : noteRow->y;
+			return instrumentClip->getMainColourFromY(yNote, noteRow->getColourOffset(instrumentClip));
+		}
+		return instrumentClip->getMainColourFromY(0, 0);
+	}
+
+	if (output->colour != 0) {
+		return RGB::fromHue(output->colour);
 	}
 	return RGB::monochrome(160);
 }
@@ -950,7 +971,7 @@ void smSysex::sendView(MIDICable& cable, JsonDeserializer& reader) {
 
 		Clip* colourClip = clip ? clip : output->getActiveClip();
 		uint32_t section = (colourClip && colourClip->section < kMaxNumSections) ? colourClip->section : 0;
-		RGB colour = viewRowColour(output, colourClip);
+		RGB colour = viewRowColour(output, colourClip, isGrid);
 
 		uint32_t state = 0;
 		if (clip) {
