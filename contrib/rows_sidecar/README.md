@@ -26,6 +26,17 @@ Open `http://localhost:8080/` in Chrome and allow MIDI when it asks. (`localhost
 secure context, so the permission prompt appears; a bare `http://192.168.…` URL is not,
 and Chrome will refuse Web MIDI there — that only matters for the desktop, see below.)
 
+**Chrome 152 on macOS drops all SysEx** in both directions: ports enumerate, permission is
+granted, and not one message gets through, while any other MIDI client on the same machine
+works. It is the UMP MIDI backend Chrome switched to; disabling it fixes it:
+
+```bash
+open -na "Google Chrome" --args --disable-features=MidiMacUmp
+```
+
+Verified here on 152.0.7977.76. If a plain Chrome shows *no reply from the Deluge* while
+`hw_view.py` prints rows happily, this is why.
+
 The status line at the bottom shows the port state and which Deluge UI is on screen. If
 it says *no reply*, the firmware is probably older than the `view` query — check with:
 
