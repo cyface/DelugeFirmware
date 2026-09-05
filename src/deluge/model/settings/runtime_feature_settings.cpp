@@ -246,6 +246,9 @@ void RuntimeFeatureSettings::init() {
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::DrumVelocityLayers],
 	                  STRING_FOR_COMMUNITY_FEATURE_DRUM_VELOCITY_LAYERS, "drumVelocityLayers",
 	                  RuntimeFeatureStateToggle::Off);
+	// Let an external editor edit the loaded synth/kit live over the sysex protocol
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SysexLiveEdit], STRING_FOR_COMMUNITY_FEATURE_SYSEX_LIVE_EDIT,
+	                  "sysexLiveEdit", RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

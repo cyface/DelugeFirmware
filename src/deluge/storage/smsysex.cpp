@@ -39,6 +39,7 @@
 #include "scheduler_api.h"
 #include "storage/audio/audio_file_holder.h"
 #include "storage/multi_range/multi_range.h"
+#include "storage/smsysex_live.h"
 #include "util/containers.h"
 #include "util/d_stringbuf.h"
 #include "util/functions.h"
@@ -353,20 +354,6 @@ static void reloadPresetFromFile(const char* path) {
 		return;
 	}
 
-	// Drop any hibernating (cached but unused) copy, so the next load reads the file.
-	for (Instrument** prevPointer = &currentSong->firstHibernatingInstrument; *prevPointer;) {
-		Instrument* instrument = *prevPointer;
-		if ((instrument->type == OutputType::SYNTH || instrument->type == OutputType::KIT)
-		    && !strcasecmp(instrument->name.get(), presetName.get())
-		    && !strcasecmp(instrument->dirPath.get(), dirPath.get())) {
-			*prevPointer = (Instrument*)instrument->next;
-			currentSong->deleteOutput(instrument);
-		}
-		else {
-			prevPointer = (Instrument**)&instrument->next;
-		}
-	}
-
 	// See whether the preset is in use in the song.
 	Instrument* oldInstrument = nullptr;
 	for (Output* output = currentSong->firstOutput; output; output = output->next) {
@@ -381,44 +368,12 @@ static void reloadPresetFromFile(const char* path) {
 		return;
 	}
 
-	FilePointer filePointer;
-	if (!StorageManager::fileExists(path, &filePointer)) {
-		return;
-	}
-
 	Instrument* newInstrument = nullptr;
-	Error error = StorageManager::loadInstrumentFromFile(currentSong, nullptr, oldInstrument->type, false,
-	                                                     &newInstrument, &filePointer, &presetName, &dirPath);
-	if (error != Error::NONE || newInstrument == nullptr) {
+	if (smSysex::live::swapInstrumentFromFile(oldInstrument, path, &presetName, &dirPath, &newInstrument)
+	    != Error::NONE) {
 		return;
 	}
-
-	error = newInstrument->loadAllAudioFiles(true);
-	if (error != Error::NONE) {
-		currentSong->deleteOutput(newInstrument);
-		return;
-	}
-
-	// The file is now the truth - the old in-RAM copy must be deleted, not hibernated, or it would
-	// shadow the file next time the preset gets loaded.
-	oldInstrument->editedByUser = false;
-	currentSong->replaceInstrument(oldInstrument, newInstrument);
-	currentSong->instrumentSwapped(newInstrument);
-
-	Clip* currentClip = getCurrentClip();
-	if (currentClip && currentClip->output == newInstrument) {
-		char modelStackMemory[MODEL_STACK_MAX_SIZE];
-		ModelStackWithTimelineCounter* modelStack =
-		    setupModelStackWithTimelineCounter(modelStackMemory, currentSong, currentClip);
-		view.instrumentChanged(modelStack, newInstrument);
-	}
-
-	RootUI* rootUI = getRootUI();
-	if (rootUI == &instrumentClipView || rootUI == &automationView) {
-		instrumentClipView.recalculateColours();
-	}
-	uiNeedsRendering(rootUI);
-
+	smSysex::live::bumpGeneration();
 	display->displayPopup(presetName.get());
 }
 
@@ -900,6 +855,9 @@ void smSysex::assignSession(MIDICable& cable, JsonDeserializer& reader) {
 	jWriter.writeAttribute("midMin", (sessionNum << SYSEX_SESSION_SHIFT) + 1);
 	jWriter.writeAttribute("midMax", (sessionNum << SYSEX_SESSION_SHIFT) + SYSEX_MSGID_MAX);
 	jWriter.writeAttribute("pipe", kMaxPipelinedRequests);
+	if (smSysex::live::enabled()) {
+		jWriter.writeAttribute("live", smSysex::live::kProtocolVersion);
+	}
 	jWriter.closeTag(true);
 	sendMsg(cable, jWriter);
 }
@@ -1482,7 +1440,30 @@ void smSysex::sysexReceived(MIDICable& cable, uint8_t* data, int32_t len) {
 	memcpy(de.data, data, len);
 }
 
+// Live-edit ops answer even while the feature is off, so a client learns why instead of timing out.
+static void liveOp(MIDICable& cable, JsonDeserializer& reader, void (*op)(MIDICable&, JsonDeserializer&),
+                   char const* replyTag) {
+	if (smSysex::live::enabled()) {
+		op(cable, reader);
+		return;
+	}
+	char const* tagName;
+	reader.match('{');
+	while (*(tagName = reader.readNextTagOrAttributeName())) {
+		reader.exitTag();
+	}
+	reader.match('}');
+	smSysex::startReply(jWriter, reader);
+	jWriter.writeOpeningTag(replyTag, false, true);
+	jWriter.writeAttribute("err", 1);
+	jWriter.writeAttribute("why", "off");
+	jWriter.closeTag(true);
+	smSysex::sendMsg(cable, jWriter);
+}
+
 void smSysex::handleNextSysEx() {
+	// Pushes to a live-edit subscriber go out from here too: this task runs whether or not a request is waiting.
+	smSysex::live::tick();
 
 	if (SysExQ.empty())
 		return;
@@ -1557,6 +1538,30 @@ void smSysex::handleNextSysEx() {
 		}
 		else if (!strcmp(tagName, "session")) {
 			assignSession(de.cable, parser);
+			goto done;
+		}
+		else if (!strcmp(tagName, "inst")) {
+			liveOp(de.cable, parser, smSysex::live::getInstrument, "^inst");
+			goto done;
+		}
+		else if (!strcmp(tagName, "save")) {
+			liveOp(de.cable, parser, smSysex::live::savePreset, "^save");
+			goto done;
+		}
+		else if (!strcmp(tagName, "load")) {
+			liveOp(de.cable, parser, smSysex::live::loadPreset, "^load");
+			goto done;
+		}
+		else if (!strcmp(tagName, "select")) {
+			liveOp(de.cable, parser, smSysex::live::selectRow, "^select");
+			goto done;
+		}
+		else if (!strcmp(tagName, "param")) {
+			liveOp(de.cable, parser, smSysex::live::setParam, "^param");
+			goto done;
+		}
+		else if (!strcmp(tagName, "sub")) {
+			liveOp(de.cable, parser, smSysex::live::subscribe, "^sub");
 			goto done;
 		}
 		else if (!strcmp(tagName, "ping")) {

@@ -75,6 +75,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	SysexPresetReload,
 	GridUnarmedClipBrightness,
 	DrumVelocityLayers,
+	SysexLiveEdit,
 	MaxElement // Keep as boundary
 };
 

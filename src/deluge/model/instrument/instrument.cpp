@@ -25,6 +25,7 @@
 #include "model/model_stack.h"
 #include "processing/engines/audio_engine.h"
 #include "storage/audio/audio_file_manager.h"
+#include "storage/smsysex_live.h"
 #include "storage/storage_manager.h"
 #include <cstring>
 #include <new>
@@ -39,6 +40,7 @@ Instrument::~Instrument() {
 // Returns whether subslot changed
 void Instrument::beenEdited(bool shouldMoveToEmptySlot) {
 	editedByUser = true;
+	smSysex::live::noteEdited(this);
 }
 
 void Instrument::deleteAnyInstancesOfClip(InstrumentClip* clip) {
