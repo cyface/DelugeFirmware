@@ -229,6 +229,15 @@ bool splitPresetPath(char const* path, String* name, String* dirPath) {
 	return dirPath->set(dirStart, lastSlash - dirStart) == Error::NONE;
 }
 
+/// Whether fileStringToParam found a parameter. Its "not found" value is GLOBAL_NONE, which sits *below*
+/// UNPATCHED_START (it is the end of the patched enum), so a plain range check lets an unknown name through
+/// as a patched id and the param collection is then indexed out of range (a data abort on hardware).
+bool isRealParam(deluge::modulation::params::ParamType p) {
+	using namespace deluge::modulation::params;
+	return p != util::to_underlying(GLOBAL_NONE) && p != util::to_underlying(PLACEHOLDER_RANGE)
+	       && p < kUnpatchedAndPatchedMaximum;
+}
+
 /// "/" + dir + "/" + name + ".XML"
 Error joinPresetPath(String* path, String* dirPath, String* name) {
 	Error error = path->set("/");
@@ -630,7 +639,7 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 	int32_t paramId;
 	if (!source.isEmpty()) {
 		ParamType destination = fileStringToParam(Kind::PATCHED, name.get(), true);
-		if (destination >= UNPATCHED_START) {
+		if (!isRealParam(destination) || destination >= UNPATCHED_START) {
 			replyStatus(cable, reader, "^param", Error::NONE, "name", false);
 			return;
 		}
@@ -646,7 +655,7 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 	}
 	else if (kitBus) {
 		ParamType p = fileStringToParam(Kind::UNPATCHED_GLOBAL, name.get(), false);
-		if (p >= kUnpatchedAndPatchedMaximum || p < UNPATCHED_START) {
+		if (!isRealParam(p) || p < UNPATCHED_START) {
 			replyStatus(cable, reader, "^param", Error::NONE, "name", false);
 			return;
 		}
@@ -655,7 +664,7 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 	}
 	else {
 		ParamType p = fileStringToParam(Kind::UNPATCHED_SOUND, name.get(), true);
-		if (p >= kUnpatchedAndPatchedMaximum) {
+		if (!isRealParam(p)) {
 			replyStatus(cable, reader, "^param", Error::NONE, "name", false);
 			return;
 		}
