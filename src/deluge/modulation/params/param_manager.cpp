@@ -27,6 +27,7 @@
 #include "modulation/params/param_set.h"
 #include "modulation/patch/patch_cable_set.h"
 #include "playback/playback_handler.h"
+#include "storage/smsysex_live.h"
 #include <new>
 
 ParamManager::ParamManager() {
@@ -466,6 +467,7 @@ void ParamManager::notifyParamModifiedInSomeWay(ModelStackWithAutoParam const* m
 
 	if (currentValueChanged) {
 		view.notifyParamAutomationOccurred(this);
+		smSysex::live::noteParamChanged(modelStack);
 	}
 }
 

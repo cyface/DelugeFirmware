@@ -209,6 +209,10 @@ void RuntimeFeatureSettings::init() {
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SysexPresetReload],
 	                  STRING_FOR_COMMUNITY_FEATURE_SYSEX_PRESET_RELOAD, "sysexPresetReload",
 	                  RuntimeFeatureStateToggle::Off);
+
+	// Let an external editor edit the loaded synth/kit live over the sysex protocol
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SysexLiveEdit], STRING_FOR_COMMUNITY_FEATURE_SYSEX_LIVE_EDIT,
+	                  "sysexLiveEdit", RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {
