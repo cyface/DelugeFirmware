@@ -1,8 +1,13 @@
 #include "storage/smsysex.h"
 #include "fatfs/ff.h"
 #include "gui/l10n/l10n.h"
+#include "gui/ui/root_ui.h"
 #include "gui/ui/ui.h"
 #include "gui/ui_timer_manager.h"
+#include "gui/views/automation_view.h"
+#include "gui/views/instrument_clip_view.h"
+#include "gui/views/view.h"
+#include "hid/display/display.h"
 #include "hid/display/oled.h"
 #include "hid/display/seven_segment.h"
 #include "hid/hid_sysex.h"
@@ -12,6 +17,11 @@
 #include "io/midi/midi_engine.h"
 #include "io/midi/sysex.h"
 #include "memory/general_memory_allocator.h"
+#include "model/clip/clip.h"
+#include "model/instrument/instrument.h"
+#include "model/model_stack.h"
+#include "model/settings/runtime_feature_settings.h"
+#include "model/song/song.h"
 #include "processing/engines/audio_engine.h"
 #include "scheduler_api.h"
 #include "util/containers.h"
@@ -277,6 +287,112 @@ retry:
 	sendMsg(cable, jWriter);
 }
 
+// If a preset XML file just written over sysex belongs to a synth/kit the song has cached in RAM,
+// discard the cached copy and reload it from the file, so edits saved from an external editor are
+// heard immediately without cloning the preset or rebooting.
+static void reloadPresetFromFile(const char* path) {
+	if (!runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::SysexPresetReload)) {
+		return;
+	}
+	if (currentSong == nullptr) {
+		return;
+	}
+
+	const char* lastSlash = strrchr(path, '/');
+	if (lastSlash == nullptr || lastSlash == path) {
+		return;
+	}
+	int32_t nameLen = strlen(lastSlash + 1);
+	if (nameLen <= 4 || strcasecmp(lastSlash + 1 + nameLen - 4, ".XML") != 0) {
+		return;
+	}
+
+	String presetName;
+	if (presetName.set(lastSlash + 1, nameLen - 4) != Error::NONE) {
+		return;
+	}
+	// Instrument dirPaths are stored without a leading slash ("SYNTHS", "KITS/Sub", ...).
+	const char* dirStart = (path[0] == '/') ? path + 1 : path;
+	String dirPath;
+	if (dirPath.set(dirStart, lastSlash - dirStart) != Error::NONE) {
+		return;
+	}
+
+	// Don't swap instruments while a browser, menu or other UI is stacked on top of the root
+	// view - those can hold pointers into the old Instrument.
+	if (getCurrentUI() != getRootUI()) {
+		return;
+	}
+
+	// Drop any hibernating (cached but unused) copy, so the next load reads the file.
+	for (Instrument** prevPointer = &currentSong->firstHibernatingInstrument; *prevPointer;) {
+		Instrument* instrument = *prevPointer;
+		if ((instrument->type == OutputType::SYNTH || instrument->type == OutputType::KIT)
+		    && !strcasecmp(instrument->name.get(), presetName.get())
+		    && !strcasecmp(instrument->dirPath.get(), dirPath.get())) {
+			*prevPointer = (Instrument*)instrument->next;
+			currentSong->deleteOutput(instrument);
+		}
+		else {
+			prevPointer = (Instrument**)&instrument->next;
+		}
+	}
+
+	// See whether the preset is in use in the song.
+	Instrument* oldInstrument = nullptr;
+	for (Output* output = currentSong->firstOutput; output; output = output->next) {
+		if ((output->type == OutputType::SYNTH || output->type == OutputType::KIT)
+		    && !strcasecmp(output->name.get(), presetName.get())
+		    && !strcasecmp(((Instrument*)output)->dirPath.get(), dirPath.get())) {
+			oldInstrument = (Instrument*)output;
+			break;
+		}
+	}
+	if (oldInstrument == nullptr) {
+		return;
+	}
+
+	FilePointer filePointer;
+	if (!StorageManager::fileExists(path, &filePointer)) {
+		return;
+	}
+
+	Instrument* newInstrument = nullptr;
+	Error error = StorageManager::loadInstrumentFromFile(currentSong, nullptr, oldInstrument->type, false,
+	                                                     &newInstrument, &filePointer, &presetName, &dirPath);
+	if (error != Error::NONE || newInstrument == nullptr) {
+		return;
+	}
+
+	error = newInstrument->loadAllAudioFiles(true);
+	if (error != Error::NONE) {
+		currentSong->deleteOutput(newInstrument);
+		return;
+	}
+
+	// The file is now the truth - the old in-RAM copy must be deleted, not hibernated, or it would
+	// shadow the file next time the preset gets loaded.
+	oldInstrument->editedByUser = false;
+	currentSong->replaceInstrument(oldInstrument, newInstrument);
+	currentSong->instrumentSwapped(newInstrument);
+
+	Clip* currentClip = getCurrentClip();
+	if (currentClip && currentClip->output == newInstrument) {
+		char modelStackMemory[MODEL_STACK_MAX_SIZE];
+		ModelStackWithTimelineCounter* modelStack =
+		    setupModelStackWithTimelineCounter(modelStackMemory, currentSong, currentClip);
+		view.instrumentChanged(modelStack, newInstrument);
+	}
+
+	RootUI* rootUI = getRootUI();
+	if (rootUI == &instrumentClipView || rootUI == &automationView) {
+		instrumentClipView.recalculateColours();
+	}
+	uiNeedsRendering(rootUI);
+
+	display->displayPopup(presetName.get());
+}
+
 void smSysex::closeFile(MIDICable& cable, JsonDeserializer& reader) {
 	int32_t fid = 0;
 	char const* tagName;
@@ -292,6 +408,11 @@ void smSysex::closeFile(MIDICable& cable, JsonDeserializer& reader) {
 	reader.match('}');
 
 	FILdata* fd = entryForFID(fid);
+	bool wasWrite = fd != nullptr && fd->fileOpen && fd->forWrite;
+	String writtenPath;
+	if (wasWrite) {
+		writtenPath.set(&fd->fName);
+	}
 	FRESULT errCode = closeFIL(fd);
 
 	startReply(jWriter, reader);
@@ -301,6 +422,11 @@ void smSysex::closeFile(MIDICable& cable, JsonDeserializer& reader) {
 	jWriter.closeTag(true);
 
 	sendMsg(cable, jWriter);
+
+	// Reply first so the sender isn't stalled, then reload the preset if the song has it loaded.
+	if (wasWrite && errCode == FRESULT::FR_OK) {
+		reloadPresetFromFile(writtenPath.get());
+	}
 }
 
 void smSysex::deleteFile(MIDICable& cable, JsonDeserializer& reader) {
