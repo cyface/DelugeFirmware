@@ -241,7 +241,7 @@ public:
 	                                  int32_t newParamId, AutoParam* newAutoParam) const;
 	ModelStackWithAutoParam* getUnpatchedAutoParamFromId(int32_t newParamId);
 	ModelStackWithAutoParam* getPatchedAutoParamFromId(int32_t newParamId);
-	ModelStackWithAutoParam* getPatchCableAutoParamFromId(int32_t newParamId);
+	ModelStackWithAutoParam* getPatchCableAutoParamFromId(int32_t newParamId, bool allowCreation = true);
 
 	inline ModelStackWithSoundFlags* addSoundFlags() const;
 	inline ModelStackWithSoundFlags* addDummySoundFlags() const;
