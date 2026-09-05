@@ -668,6 +668,13 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 			replyStatus(cable, reader, "^param", Error::NONE, "name", false);
 			return;
 		}
+		// Two patched params are cable destinations only: no <defaultParams> attribute holds them
+		// (Sound::writeParamsToFile), so a value set here would never reach a save. "volume" is the trap:
+		// the attribute of that name is GLOBAL_VOLUME_POST_FX, spelled "volumePostFX" on the wire.
+		if (p == LOCAL_VOLUME || p == GLOBAL_VOLUME_POST_REVERB_SEND) {
+			replyStatus(cable, reader, "^param", Error::NONE, "name", false);
+			return;
+		}
 		if (p < UNPATCHED_START) {
 			kind = Kind::PATCHED;
 			paramId = p;
@@ -682,7 +689,17 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 	ModelStackWithTimelineCounter* modelStack = setupModelStackWithTimelineCounter(modelStackMemory, currentSong, clip);
 	ModelStackWithAutoParam* modelStackWithParam = nullptr;
 
-	if (instrument->type == OutputType::SYNTH || kitBus) {
+	if (kind == Kind::PATCH_CABLE && instrument->type == OutputType::SYNTH) {
+		// The synth's own resolver (MelodicInstrument::getModelStackWithParam) creates a missing cable
+		// unconditionally, which is right for a knob but not for a read: a "param" without a value must
+		// not add a <patchCable> to the preset. Resolve the cable here so a read can refuse to create.
+		ModelStackWithThreeMainThings* modelStackWithThreeMainThings =
+		    modelStack->addOtherTwoThingsButNoNoteRow(instrument->toModControllable(), &clip->paramManager);
+		if (modelStackWithThreeMainThings != nullptr) {
+			modelStackWithParam = modelStackWithThreeMainThings->getPatchCableAutoParamFromId(paramId, haveValue);
+		}
+	}
+	else if (instrument->type == OutputType::SYNTH || kitBus) {
 		modelStackWithParam = instrument->getModelStackWithParam(modelStack, clip, paramId, kind, kitBus, false);
 	}
 	else {
@@ -694,6 +711,7 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 			replyStatus(cable, reader, "^param", Error::NONE, "noDrum", false);
 			return;
 		}
+		drumIndex = kit->getDrumIndex(drum); // the reply reports the row that was resolved, not the argument
 		InstrumentClip* instrumentClip = static_cast<InstrumentClip*>(clip);
 		ModelStackWithNoteRow* modelStackWithNoteRow = instrumentClip->getNoteRowForDrum(modelStack, drum);
 		ModelStackWithThreeMainThings* modelStackWithThreeMainThings = nullptr;
@@ -717,7 +735,7 @@ void smSysex::live::setParam(MIDICable& cable, JsonDeserializer& reader) {
 				modelStackWithParam = modelStackWithThreeMainThings->getUnpatchedAutoParamFromId(paramId);
 			}
 			else {
-				modelStackWithParam = modelStackWithThreeMainThings->getPatchCableAutoParamFromId(paramId);
+				modelStackWithParam = modelStackWithThreeMainThings->getPatchCableAutoParamFromId(paramId, haveValue);
 			}
 		}
 	}
