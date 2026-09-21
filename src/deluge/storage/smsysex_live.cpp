@@ -81,6 +81,11 @@ bool dirtyPending = false;
 uint32_t dirtyMarkedAt = 0;
 constexpr uint32_t kDirtySettle = kSampleRate * 3 / 10; // 300 ms of quiet before "pull the preset"
 
+/// Open ParamEdit scopes, and whether a value changed inside them cannot go out as ^chg (no file name, a cable
+/// on a cable). Only such an edit still marks ^dirty.
+int32_t paramEditDepth = 0;
+bool paramEditUnreported = false;
+
 /// What ^inst reports, remembered so a change can be pushed without hooking every site that makes one.
 struct InstrumentSnapshot {
 	Output* output = nullptr;
@@ -236,6 +241,40 @@ bool isRealParam(deluge::modulation::params::ParamType p) {
 	using namespace deluge::modulation::params;
 	return p != util::to_underlying(GLOBAL_NONE) && p != util::to_underlying(PLACEHOLDER_RANGE)
 	       && p < kUnpatchedAndPatchedMaximum;
+}
+
+/// The file name a ^chg entry carries for a param, and its cable source ("s") when it is a patch cable, or
+/// nullptr when the param has none: an unknown id, or a cable modulating another cable's depth, which this
+/// protocol does not address.
+char const* wireName(deluge::modulation::params::Kind kind, int32_t paramId, char const** source) {
+	using namespace deluge::modulation::params;
+	char const* name = nullptr;
+	*source = nullptr;
+	switch (kind) {
+	case Kind::PATCHED:
+		name = paramNameForFile(Kind::PATCHED, paramId);
+		break;
+	case Kind::UNPATCHED_SOUND:
+		name = paramNameForFile(Kind::UNPATCHED_SOUND, paramId + UNPATCHED_START);
+		break;
+	case Kind::UNPATCHED_GLOBAL:
+		name = paramNameForFile(Kind::UNPATCHED_GLOBAL, paramId + UNPATCHED_START);
+		break;
+	case Kind::PATCH_CABLE: {
+		ParamDescriptor destination;
+		PatchSource patchSource;
+		PatchCableSet::dissectParamId(paramId, &destination, &patchSource);
+		if (!destination.isJustAParam()) {
+			return nullptr;
+		}
+		name = paramNameForFile(Kind::PATCHED, destination.getJustTheParam());
+		*source = sourceToString(patchSource);
+		break;
+	}
+	default:
+		return nullptr;
+	}
+	return (name != nullptr && name[0] != 0) ? name : nullptr;
 }
 
 /// "/" + dir + "/" + name + ".XML"
@@ -861,8 +900,13 @@ void smSysex::live::subscribe(MIDICable& cable, JsonDeserializer& reader) {
 void smSysex::live::noteParamChanged(ModelStackWithAutoParam const* modelStack) {
 	using namespace deluge::modulation::params;
 	liveGeneration++;
-	if (suppressHooks || !subscribed() || modelStack == nullptr || modelStack->autoParam == nullptr
-	    || modelStack->paramCollection == nullptr) {
+	if (suppressHooks || !subscribed()) {
+		return;
+	}
+	if (modelStack == nullptr || modelStack->autoParam == nullptr || modelStack->paramCollection == nullptr) {
+		if (paramEditDepth > 0) {
+			paramEditUnreported = true; // something changed that cannot be named: let the client pull
+		}
 		return;
 	}
 	Kind kind = modelStack->paramCollection->getParamKind();
@@ -873,6 +917,10 @@ void smSysex::live::noteParamChanged(ModelStackWithAutoParam const* modelStack) 
 	ModControllable* modControllable = modelStack->modControllable;
 	int32_t paramId = modelStack->paramId;
 	int32_t value = modelStack->autoParam->getCurrentValue();
+	char const* source;
+	if (paramEditDepth > 0 && wireName(kind, paramId, &source) == nullptr) {
+		paramEditUnreported = true;
+	}
 	for (int32_t i = 0; i < numPending; i++) {
 		if (pending[i].modControllable == modControllable && pending[i].kind == kind && pending[i].paramId == paramId) {
 			pending[i].value = value;
@@ -894,8 +942,23 @@ void smSysex::live::noteEdited(Instrument* instrument) {
 	if (instrument != currentSynthOrKit()) {
 		return;
 	}
+	if (paramEditDepth > 0 && !paramEditUnreported) {
+		// The values are on their way as ^chg, or none changed (a knob turned against its end stop): a pull
+		// would find nothing new.
+		return;
+	}
 	dirtyPending = true;
 	dirtyMarkedAt = AudioEngine::audioSampleTimer;
+}
+
+smSysex::live::ParamEdit::ParamEdit() {
+	if (paramEditDepth++ == 0) {
+		paramEditUnreported = false;
+	}
+}
+
+smSysex::live::ParamEdit::~ParamEdit() {
+	paramEditDepth--;
 }
 
 namespace {
@@ -925,34 +988,9 @@ bool locateChange(Instrument* instrument, ModControllable* modControllable, bool
 /// One entry of a ^chg frame: {"n": name, "s": source (cables), "v": value, "d": row | "b": 1}.
 /// False when the param has no file name (a nested cable, an unknown id) and is better left out.
 bool writeChange(PendingChange const& change, bool isBus, int32_t drumIndex) {
-	using namespace deluge::modulation::params;
-	char const* name = nullptr;
-	char const* source = nullptr;
-	switch (change.kind) {
-	case Kind::PATCHED:
-		name = paramNameForFile(Kind::PATCHED, change.paramId);
-		break;
-	case Kind::UNPATCHED_SOUND:
-		name = paramNameForFile(Kind::UNPATCHED_SOUND, change.paramId + UNPATCHED_START);
-		break;
-	case Kind::UNPATCHED_GLOBAL:
-		name = paramNameForFile(Kind::UNPATCHED_GLOBAL, change.paramId + UNPATCHED_START);
-		break;
-	case Kind::PATCH_CABLE: {
-		ParamDescriptor destination;
-		PatchSource patchSource;
-		PatchCableSet::dissectParamId(change.paramId, &destination, &patchSource);
-		if (!destination.isJustAParam()) {
-			return false; // a cable modulating another cable's depth: not addressed by this protocol
-		}
-		name = paramNameForFile(Kind::PATCHED, destination.getJustTheParam());
-		source = sourceToString(patchSource);
-		break;
-	}
-	default:
-		return false;
-	}
-	if (name == nullptr || name[0] == 0) {
+	char const* source;
+	char const* name = wireName(change.kind, change.paramId, &source);
+	if (name == nullptr) {
 		return false;
 	}
 	jWriter.writeOpeningTag(nullptr, true);

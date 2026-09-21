@@ -86,6 +86,7 @@
 #include "processing/stem_export/stem_export.h"
 #include "storage/file_item.h"
 #include "storage/flash_storage.h"
+#include "storage/smsysex_live.h"
 #include "storage/storage_manager.h"
 
 namespace params = deluge::modulation::params;
@@ -830,9 +831,13 @@ void View::modEncoderAction(int32_t whichModEncoder, int32_t offset) {
 			modEncoderAction_nonExistentParam(whichModEncoder, offset, modelStackWithParam);
 		}
 
-		// Or, if normal case - an actual param
+		// Or, if normal case - an actual param. Only its value changes, which a Live Edit client hears as
+		// ^chg, so the edit is not also a ^dirty (smsysex_live.h).
 		else {
+			smSysex::live::ParamEdit paramEdit;
 			modEncoderAction_existentParam(whichModEncoder, offset, modelStackWithParam, noteTailsAllowedBefore);
+			instrumentBeenEdited();
+			return;
 		}
 	}
 
