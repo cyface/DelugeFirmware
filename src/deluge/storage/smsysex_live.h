@@ -71,6 +71,19 @@ void subscribe(MIDICable& cable, JsonDeserializer& reader);
 void noteParamChanged(ModelStackWithAutoParam const* modelStack);
 /// Hook: an instrument was edited in some way (Instrument::beenEdited).
 void noteEdited(Instrument* instrument);
+
+/// Open around an edit whose only effect is parameter values (a gold-knob turn, an automation node), up to
+/// and including its beenEdited. Unless it changed a value ^chg cannot name, noteEdited marks no ^dirty for
+/// it: the client already has every value it changed, or it changed none (a knob turned against its end
+/// stop), and a pull would find nothing new. The instrument is still marked edited, which ^inst reports.
+/// Nests.
+class ParamEdit {
+public:
+	ParamEdit();
+	~ParamEdit();
+	ParamEdit(ParamEdit const&) = delete;
+	ParamEdit& operator=(ParamEdit const&) = delete;
+};
 /// Called on every pass of the SysEx task: drains the pending changes to the subscriber.
 void tick();
 

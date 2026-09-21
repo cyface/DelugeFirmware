@@ -27,6 +27,7 @@
 #include "modulation/patch/patch_cable_set.h"
 #include "playback/mode/playback_mode.h"
 #include "playback/playback_handler.h"
+#include "storage/smsysex_live.h"
 
 // namespace deluge::gui::views::automation::editor_layout {
 
@@ -756,11 +757,15 @@ void AutomationEditorLayoutModControllable::automationModEncoderActionForUnselec
 			// use default interpolation settings
 			initInterpolation();
 
-			modelStackWithParam->autoParam->setValuePossiblyForRegion(newValue, modelStackWithParam, view.modPos,
-			                                                          view.modLength);
+			{
+				// Only a value changes: ^chg carries it to a Live Edit client (smsysex_live.h).
+				smSysex::live::ParamEdit paramEdit;
+				modelStackWithParam->autoParam->setValuePossiblyForRegion(newValue, modelStackWithParam, view.modPos,
+				                                                          view.modLength);
 
-			if (!getOnArrangerView()) {
-				modelStackWithParam->getTimelineCounter()->instrumentBeenEdited();
+				if (!getOnArrangerView()) {
+					modelStackWithParam->getTimelineCounter()->instrumentBeenEdited();
+				}
 			}
 
 			if (!playbackHandler.isEitherClockActive() || !modelStackWithParam->autoParam->isAutomated()) {
@@ -985,14 +990,19 @@ void AutomationEditorLayoutModControllable::setAutomationParameterValue(ModelSta
 	// also change)
 	initInterpolation();
 
-	// called twice because there was a weird bug where for some reason the first call wasn't taking
-	// effect on one pad (and whatever pad it was changed every time)...super weird...calling twice
-	// fixed it...
-	modelStack->autoParam->setValuePossiblyForRegion(newValue, modelStack, squareStart, squareWidth);
-	modelStack->autoParam->setValuePossiblyForRegion(newValue, modelStack, squareStart, squareWidth);
+	{
+		// Only values change: ^chg carries them to a Live Edit client (smsysex_live.h).
+		smSysex::live::ParamEdit paramEdit;
 
-	if (!getOnArrangerView()) {
-		modelStack->getTimelineCounter()->instrumentBeenEdited();
+		// called twice because there was a weird bug where for some reason the first call wasn't taking
+		// effect on one pad (and whatever pad it was changed every time)...super weird...calling twice
+		// fixed it...
+		modelStack->autoParam->setValuePossiblyForRegion(newValue, modelStack, squareStart, squareWidth);
+		modelStack->autoParam->setValuePossiblyForRegion(newValue, modelStack, squareStart, squareWidth);
+
+		if (!getOnArrangerView()) {
+			modelStack->getTimelineCounter()->instrumentBeenEdited();
+		}
 	}
 
 	// in a multi pad press, no need to display all the values calculated
@@ -1296,6 +1306,8 @@ void AutomationEditorLayoutModControllable::handleAutomationMultiPadPress(
 			// set value for pads in between
 			int32_t newValue =
 			    modelStackWithParam->paramCollection->knobPosToParamValue(newKnobPos, modelStackWithParam);
+			// Only values change: ^chg carries them to a Live Edit client (smsysex_live.h).
+			smSysex::live::ParamEdit paramEdit;
 			modelStackWithParam->autoParam->setValuePossiblyForRegion(newValue, modelStackWithParam, squareStart,
 			                                                          squareWidth);
 			modelStackWithParam->autoParam->setValuePossiblyForRegion(newValue, modelStackWithParam, squareStart,
