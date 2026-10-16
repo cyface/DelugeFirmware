@@ -34,21 +34,22 @@ TEST(ChordTests, getChordBoundsCheck) {
 }
 
 TEST(ChordTests, adjustChordRowOffsetBoundsCheck) {
-	// Test that the chord row offset is bounded by 0 and kOffScreenChords
+	// Test that the chord row offset is bounded by 0 and the last full screen of the library's chords
+	const int8_t maxRowOffset = chordList.chordCount() - kDisplayHeight;
 	// Test the lower bound
 	chordList.chordRowOffset = 0;
 	chordList.adjustChordRowOffset(-1);
 	CHECK_EQUAL(0, chordList.chordRowOffset);
 
 	// Test the upper bound
-	chordList.chordRowOffset = kOffScreenChords;
+	chordList.chordRowOffset = maxRowOffset;
 	chordList.adjustChordRowOffset(1);
-	CHECK_EQUAL(kOffScreenChords, chordList.chordRowOffset);
+	CHECK_EQUAL(maxRowOffset, chordList.chordRowOffset);
 
 	// Test that doing a 0 offset doesn't change the value
-	chordList.chordRowOffset = kUniqueChords / 2;
+	chordList.chordRowOffset = maxRowOffset / 2;
 	chordList.adjustChordRowOffset(0);
-	CHECK_EQUAL(kUniqueChords / 2, chordList.chordRowOffset);
+	CHECK_EQUAL(maxRowOffset / 2, chordList.chordRowOffset);
 
 	// Test that a 1 offset increases the value by 1
 	chordList.chordRowOffset = 0;
@@ -56,13 +57,13 @@ TEST(ChordTests, adjustChordRowOffsetBoundsCheck) {
 	CHECK_EQUAL(1, chordList.chordRowOffset);
 
 	// Test that a -1 offset decreases the value by 1
-	chordList.chordRowOffset = kOffScreenChords;
+	chordList.chordRowOffset = maxRowOffset;
 	chordList.adjustChordRowOffset(-1);
-	CHECK_EQUAL(kOffScreenChords - 1, chordList.chordRowOffset);
+	CHECK_EQUAL(maxRowOffset - 1, chordList.chordRowOffset);
 }
 
 TEST(ChordTests, adjustVoicingOffsetBoundsCheck) {
-	for (int chordNo = 0; chordNo < kUniqueChords; chordNo++) {
+	for (int chordNo = 0; chordNo < chordList.chordCount(); chordNo++) {
 		// Test that the voicing offset is bounded by 0 and kUniqueVoicings - 1
 		// Test the lower bound
 		chordList.voicingOffset[chordNo] = 0;

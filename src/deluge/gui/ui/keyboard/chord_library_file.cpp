@@ -17,6 +17,7 @@
 
 #include "gui/ui/keyboard/chord_library_file.h"
 #include "definitions_cxx.hpp"
+#include "model/settings/runtime_feature_settings.h"
 #include "printf.h"
 #include "storage/storage_manager.h"
 #include "util/d_string.h"
@@ -347,6 +348,51 @@ bool nextChordLibraryFile(char const* current, char* next) {
 	}
 	f_closedir(&dir);
 	return found;
+}
+
+// The one file-backed library. Lives in SDRAM: ~5 KB, only ever touched from the UI.
+PLACE_SDRAM_BSS static ChordLibraryData fileLibrary;
+
+bool ChordLibrary::useFile(char const* name) {
+	Error error = readChordLibraryFile(name, fileLibrary, lastError_, sizeof(lastError_));
+	if (error != Error::NONE) {
+		return false;
+	}
+	chords_ = fileLibrary.chords;
+	chordCount_ = fileLibrary.chordCount;
+	library_ = ChordLibraryType::FILE;
+	generation_++;
+	return true;
+}
+
+void ChordLibrary::selectNext() {
+	char next[kMaxChordLibraryNameLength];
+	const char* chosen;
+	// After Default the files start from the top; after a file (loaded or not) the next one up alphabetically
+	const char* after = (strcasecmp(name_, kDefaultChordLibraryName) == 0) ? "" : name_;
+	chosen = nextChordLibraryFile(after, next) ? next : kDefaultChordLibraryName;
+	runtimeFeatureSettings.setChordLibraryName(chosen);
+	select(chosen);
+}
+
+void ChordLibrary::refreshFromSettings() {
+	const char* wanted = runtimeFeatureSettings.getChordLibraryName();
+	if (*wanted == '\0') {
+		wanted = kDefaultChordLibraryName;
+	}
+	if (strcasecmp(wanted, name_) != 0) {
+		select(wanted);
+	}
+}
+
+const char* ChordLibrary::pageName(int32_t page) const {
+	if (page < 0) {
+		return nullptr;
+	}
+	if (library_ != ChordLibraryType::FILE || page >= kMaxLibraryPages) {
+		return nullptr;
+	}
+	return fileLibrary.pageNames[page];
 }
 
 } // namespace deluge::gui::ui::keyboard

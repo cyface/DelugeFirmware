@@ -18,10 +18,8 @@
 
 #include "gui/ui/keyboard/chords.h"
 #include "definitions_cxx.hpp"
-#include "gui/ui/keyboard/chord_library_file.h"
 #include "hid/display/display.h"
 #include "io/debug/log.h"
-#include "model/settings/runtime_feature_settings.h"
 #include "printf.h"
 #include <array>
 #include <cstring>
@@ -58,26 +56,11 @@ ChordQuality getChordQuality(NoteSet& notes) {
 
 ChordLibrary chordLibrary{};
 
-// The one file-backed library. Lives in SDRAM: ~5 KB, only ever touched from the UI.
-PLACE_SDRAM_BSS static ChordLibraryData fileLibrary;
-
 void ChordLibrary::useBuiltIn() {
 	chords_ = defaultChordLibrary.data();
 	chordCount_ = kDefaultLibraryChords;
 	library_ = ChordLibraryType::DEFAULT;
 	generation_++;
-}
-
-bool ChordLibrary::useFile(char const* name) {
-	Error error = readChordLibraryFile(name, fileLibrary, lastError_, sizeof(lastError_));
-	if (error != Error::NONE) {
-		return false;
-	}
-	chords_ = fileLibrary.chords;
-	chordCount_ = fileLibrary.chordCount;
-	library_ = ChordLibraryType::FILE;
-	generation_++;
-	return true;
 }
 
 void ChordLibrary::select(char const* name) {
@@ -92,36 +75,6 @@ void ChordLibrary::select(char const* name) {
 	}
 	strncpy(name_, name, sizeof(name_) - 1);
 	name_[sizeof(name_) - 1] = '\0';
-}
-
-void ChordLibrary::selectNext() {
-	char next[kMaxChordLibraryNameLength];
-	const char* chosen;
-	// After Default the files start from the top; after a file (loaded or not) the next one up alphabetically
-	const char* after = (strcasecmp(name_, kDefaultChordLibraryName) == 0) ? "" : name_;
-	chosen = nextChordLibraryFile(after, next) ? next : kDefaultChordLibraryName;
-	runtimeFeatureSettings.setChordLibraryName(chosen);
-	select(chosen);
-}
-
-void ChordLibrary::refreshFromSettings() {
-	const char* wanted = runtimeFeatureSettings.getChordLibraryName();
-	if (*wanted == '\0') {
-		wanted = kDefaultChordLibraryName;
-	}
-	if (strcasecmp(wanted, name_) != 0) {
-		select(wanted);
-	}
-}
-
-const char* ChordLibrary::pageName(int32_t page) const {
-	if (page < 0) {
-		return nullptr;
-	}
-	if (library_ != ChordLibraryType::FILE || page >= kMaxLibraryPages) {
-		return nullptr;
-	}
-	return fileLibrary.pageNames[page];
 }
 
 void ChordList::refreshFromSettings() {
