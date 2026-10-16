@@ -249,6 +249,9 @@ void RuntimeFeatureSettings::init() {
 	// Let an external editor edit the loaded synth/kit live over the sysex protocol
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SysexLiveEdit], STRING_FOR_COMMUNITY_FEATURE_SYSEX_LIVE_EDIT,
 	                  "sysexLiveEdit", RuntimeFeatureStateToggle::Off);
+	// Shortcut Overlay
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::ShortcutOverlay],
+	                  STRING_FOR_COMMUNITY_FEATURE_SHORTCUT_OVERLAY, "shortcutOverlay", RuntimeFeatureStateToggle::On);
 }
 
 void RuntimeFeatureSettings::factoryReset(bool showPopup) {

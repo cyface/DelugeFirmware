@@ -426,10 +426,6 @@ moveAfterClipInstance:
 					return ActionResult::DEALT_WITH;
 				}
 			}
-			// try loop recording if holding clip in song view
-			else if (isUIModeActive(UI_MODE_CLIP_PRESSED_IN_SONG_VIEW)) {
-				playbackHandler.tryLoopCommand(FlashStorage::defaultLoopRecordingCommand);
-			}
 			else {
 				goto notDealtWith;
 			}
@@ -1801,14 +1797,12 @@ void SessionView::resyncNewClip(Clip* newClip, ModelStackWithTimelineCounter* mo
 }
 
 void SessionView::replaceInstrumentClipWithAudioClip(Clip* clip) {
-	int32_t clipIndex = currentSong->sessionClips.getIndexForClip(clip);
-
 	if (!clip || clip->type != ClipType::INSTRUMENT) {
 		return;
 	}
 
-	if (currentSong->sessionLayout == SessionLayoutType::SessionLayoutTypeGrid
-	    && currentSong->getClipWithOutput(clip->output, false, clip)) {
+	// don't convert a track to audio if it has clip instances in arranger or more than one clip in session view
+	if (clip->output->clipHasInstance(clip) || currentSong->getClipWithOutput(clip->output, false, clip)) {
 		display->displayPopup(deluge::l10n::get(
 		    deluge::l10n::String::STRING_FOR_INSTRUMENTS_WITH_CLIPS_CANT_BE_TURNED_INTO_AUDIO_TRACKS));
 		return;
@@ -1820,6 +1814,7 @@ void SessionView::replaceInstrumentClipWithAudioClip(Clip* clip) {
 		return;
 	}
 
+	int32_t clipIndex = currentSong->sessionClips.getIndexForClip(clip);
 	Clip* newClip = currentSong->replaceInstrumentClipWithAudioClip(clip, clipIndex);
 
 	if (!newClip) {
@@ -2396,6 +2391,11 @@ void SessionView::potentiallyUpdateCompressorLEDs() {
 
 // checks if tempo has changed since it was last rendered on the display and updates it if required
 void SessionView::displayPotentialTempoChange(UI* ui) {
+	// don't refresh tempo display if we're holding an arrangement pad or clip in session view
+	if (currentUIMode == UI_MODE_HOLDING_ARRANGEMENT_ROW || currentUIMode == UI_MODE_CLIP_PRESSED_IN_SONG_VIEW) {
+		return;
+	}
+
 	// check UI in case graphics routine is called while we're in another UI (e.g. menu)
 	if (getCurrentUI() == ui) {
 		float tempo = playbackHandler.calculateBPMForDisplay();
@@ -2567,8 +2567,14 @@ bool SessionView::setupScroll(uint32_t oldScroll) {
 			if (moved) {
 				ModelStackWithTimelineCounter* modelStackWithTimelineCounter = modelStack->addTimelineCounter(clip);
 
-				clip->renderAsSingleRow(modelStackWithTimelineCounter, this, newLocalPos, xZoom,
-				                        PadLEDs::imageStore[yDisplay], PadLEDs::occupancyMaskStore[yDisplay]);
+				bool complete =
+				    clip->renderAsSingleRow(modelStackWithTimelineCounter, this, newLocalPos, xZoom,
+				                            PadLEDs::imageStore[yDisplay], PadLEDs::occupancyMaskStore[yDisplay]);
+				if (!complete) {
+					// Some of its waveform is still loading. Pending renders wait out the scroll, so this redraws
+					// the row once that finishes.
+					requestRendering(this, 1 << yDisplay, 0);
+				}
 				anyMoved = true;
 			}
 			PadLEDs::transitionTakingPlaceOnRow[yDisplay] = moved;

@@ -33,7 +33,7 @@ namespace deluge::gui::menu_item::runtime_feature {
 class OledOnlySettingToggle : public SettingToggle {
 public:
 	using SettingToggle::SettingToggle;
-	bool isRelevant(ModControllableAudio*, int32_t) override { return display->haveOLED(); }
+	bool isRelevant(ModControllableAudio*, int32_t) const override { return display->haveOLED(); }
 };
 
 // The RoundedCorners toggle additionally pushes its value into the Canvas drawing flag,
@@ -78,6 +78,7 @@ SettingToggle menuSysexPresetReload(RuntimeFeatureSettingType::SysexPresetReload
 Setting menuGridUnarmedClipBrightness(RuntimeFeatureSettingType::GridUnarmedClipBrightness);
 SettingToggle menuDrumVelocityLayers(RuntimeFeatureSettingType::DrumVelocityLayers);
 SettingToggle menuSysexLiveEdit(RuntimeFeatureSettingType::SysexLiveEdit);
+SettingToggle menuShortcutOverlay(RuntimeFeatureSettingType::ShortcutOverlay);
 
 std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettings> subMenuEntries{
     &menuDrumRandomizer,
@@ -108,7 +109,8 @@ std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettin
     &menuSysexPresetReload,
     &menuGridUnarmedClipBrightness,
     &menuDrumVelocityLayers,
-    &menuSysexLiveEdit};
+    &menuSysexLiveEdit,
+    &menuShortcutOverlay};
 
 Settings::Settings(l10n::String name, l10n::String title) : menu_item::Submenu(name, title, subMenuEntries) {
 }

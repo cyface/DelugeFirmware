@@ -33,6 +33,7 @@
 #include "gui/menu_item/bend_range/main.h"
 #include "gui/menu_item/bend_range/per_finger.h"
 #include "gui/menu_item/colour.h"
+#include "gui/menu_item/cpu/voice_usage.h"
 #include "gui/menu_item/cv/cv2Mapping.h"
 #include "gui/menu_item/cv/selection.h"
 #include "gui/menu_item/cv/submenu.h"
@@ -170,7 +171,6 @@
 #include "gui/menu_item/randomizer/randomizer_lock.h"
 #include "gui/menu_item/randomizer/randomizer_unpatched_param.h"
 #include "gui/menu_item/record/countin.h"
-#include "gui/menu_item/record/loop_command.h"
 #include "gui/menu_item/record/quantize.h"
 #include "gui/menu_item/record/threshold_mode.h"
 #include "gui/menu_item/reset_settings/reset.h"
@@ -1044,8 +1044,6 @@ PLACE_SDRAM_BSS Submenu defaultThresholdRecordingSubmenu{
     },
 };
 
-PLACE_SDRAM_BSS record::LoopCommand defaultLoopCommandMenu{STRING_FOR_LOOP_COMMAND, STRING_FOR_LOOP_COMMAND};
-
 PLACE_SDRAM_BSS Submenu recordSubmenu{
     STRING_FOR_RECORDING,
     {
@@ -1054,7 +1052,6 @@ PLACE_SDRAM_BSS Submenu recordSubmenu{
         &recordMarginsMenu,
         &monitorModeMenu,
         &defaultThresholdRecordingSubmenu,
-        &defaultLoopCommandMenu,
     },
 };
 
@@ -1065,6 +1062,7 @@ PLACE_SDRAM_BSS flash::Status flashStatusMenu{STRING_FOR_PLAY_CURSOR};
 PLACE_SDRAM_BSS firmware::Version firmwareVersionMenu{STRING_FOR_FIRMWARE_VERSION, STRING_FOR_FIRMWARE_VER_MENU_TITLE};
 
 PLACE_SDRAM_BSS battery::Level batteryLevelMenu{STRING_FOR_BATTERY_LEVEL, STRING_FOR_BATTERY_LEVEL_MENU_TITLE};
+PLACE_SDRAM_BSS cpu::VoiceUsage voiceUsageMenu{STRING_FOR_VOICE_USAGE, STRING_FOR_VOICE_USAGE};
 
 PLACE_SDRAM_BSS deluge::gui::menu_item::plugin::Status pluginStatusMenu{STRING_FOR_PLUGINS};
 
@@ -1927,6 +1925,7 @@ PLACE_SDRAM_BSS Submenu settingsRootMenu{
         &runtimeFeatureSettingsMenu,
         &batteryLevelMenu,
         &pluginStatusMenu,
+        &voiceUsageMenu,
         &firmwareVersionMenu,
     },
 };

@@ -1104,8 +1104,9 @@ ModelStackWithNoteRow* InstrumentClip::getOrCreateNoteRowForYNote(int32_t yNote,
 				modelStack->song->setRootNote(modelStack->song->key.rootNote);
 
 				thisNoteRow = getNoteRowForYNote(yNote); // Must re-get it
-				if (ALPHA_OR_BETA_VERSION && !thisNoteRow) {
+				if (!thisNoteRow) {
 					FREEZE_WITH_ERROR("E -1");
+					return modelStackWithNoteRow; // Still has no NoteRow - same as the out-of-RAM case
 				}
 
 				thisNoteRow->notes.empty(); // Undo our "total hack", above
@@ -1697,9 +1698,6 @@ Error InstrumentClip::changeInstrument(ModelStackWithTimelineCounter* modelStack
                                        InstrumentRemoval instrumentRemovalInstruction,
                                        InstrumentClip* favourClipForCloningParamManager, bool keepNoteRowsWithMIDIInput,
                                        bool giveMidiAssignmentsToNewInstrument) {
-
-	bool shouldBackUpExpressionParamsToo = false;
-
 	// If switching to Kit
 	if (newInstrument->type == OutputType::KIT) {
 
@@ -1708,10 +1706,6 @@ Error InstrumentClip::changeInstrument(ModelStackWithTimelineCounter* modelStack
 
 			// Makes sure all NoteRows onscreen are populated, and deletes any empty NoteRows not onscreen.
 			prepareToEnterKitMode(modelStack->song);
-
-			shouldBackUpExpressionParamsToo =
-			    true; // If switching from non-Kit to Kit, expression params won't get used, so store them with the
-			          // backup in case the old MelodicInstrument gets used again later. Actually is this ideal?
 		}
 	}
 
@@ -1734,9 +1728,10 @@ Error InstrumentClip::changeInstrument(ModelStackWithTimelineCounter* modelStack
 		expectNoFurtherTicks(modelStack->song); // Still necessary? Probably.
 	}
 
+	// Also unassigns NoteRows and remembers Drum names.
 	detachFromOutput(modelStack, true, (newInstrument->type == OutputType::KIT), false, keepNoteRowsWithMIDIInput,
 	                 giveMidiAssignmentsToNewInstrument,
-	                 shouldBackUpExpressionParamsToo); // Will unassignAllNoteRowsFromDrums(), and remember Drum names
+	                 false); // Keep channel expression on the Clip across output-type changes.
 
 	Error error =
 	    setInstrument(newInstrument, modelStack->song, newParamManager,
@@ -3252,9 +3247,13 @@ bool InstrumentClip::deleteSoundsWhichWontSound(Song* song) {
 				// its NoteRow?
 				if (clipIsActive && noteRow->drum) {
 
-					if (ALPHA_OR_BETA_VERSION && noteRow->drum->type == DrumType::SOUND
+					// Voices must not outlive their Sound - kill any before it's deallocated below, in all builds
+					if (noteRow->drum->type == DrumType::SOUND
 					    && static_cast<SoundDrum*>(noteRow->drum)->hasActiveVoices()) {
-						FREEZE_WITH_ERROR("E176");
+						if constexpr (ALPHA_OR_BETA_VERSION) {
+							FREEZE_WITH_ERROR("E176");
+						}
+						noteRow->drum->killAllVoices();
 					}
 
 					Drum* drum = noteRow->drum;
@@ -3427,11 +3426,10 @@ int32_t InstrumentClip::getDistanceToNextNote(Note* givenNote, ModelStackWithNot
 
 // Make sure noteRow not NULL before you call!
 int32_t InstrumentClip::getNoteRowId(NoteRow* noteRow, int32_t noteRowIndex) {
-#if ALPHA_OR_BETA_VERSION
 	if (!noteRow) {
 		FREEZE_WITH_ERROR("E380");
+		return noteRowIndex; // If resumed, don't dereference NULL below
 	}
-#endif
 	if (output->type == OutputType::KIT) {
 		return noteRowIndex;
 	}

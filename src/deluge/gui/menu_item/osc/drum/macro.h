@@ -46,7 +46,7 @@ public:
 		return deluge::plugin::displayName(deluge::plugin::drumModelInfo(model).macros[macro_]);
 	}
 
-	bool isRelevant(ModControllableAudio* modControllable, int32_t whichThing) override {
+	bool isRelevant(ModControllableAudio* modControllable, int32_t whichThing) const override {
 		Sound* sound = static_cast<Sound*>(modControllable);
 		return sound->getSynthMode() != SynthMode::FM && sound->sources[source_id_].oscType == OscType::DRUM;
 	}

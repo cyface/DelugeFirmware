@@ -76,6 +76,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	GridUnarmedClipBrightness,
 	DrumVelocityLayers,
 	SysexLiveEdit,
+	ShortcutOverlay,
 	MaxElement // Keep as boundary
 };
 
