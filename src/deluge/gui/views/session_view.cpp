@@ -4370,6 +4370,11 @@ ActionResult SessionView::gridHandlePadsLaunch(int32_t x, int32_t y, int32_t on,
 ActionResult SessionView::gridHandlePadsLaunchImmediate(int32_t x, int32_t y, int32_t on, Clip* clip) {
 	// From here all actions only happen on press
 	if (!on) {
+		// Pressing an empty pad created this clip and selected it, so its release has to end that selection
+		// or the song view stays stuck in UI_MODE_CLIP_PRESSED_IN_SONG_VIEW with no pad held
+		if (gridFirstPressedX == x && gridFirstPressedY == y) {
+			clipPressEnded();
+		}
 		return ActionResult::DEALT_WITH;
 	}
 
