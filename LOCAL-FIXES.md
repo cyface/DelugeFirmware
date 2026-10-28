@@ -16,6 +16,7 @@ Last synced with upstream main: `7aa229721` (2026-10-28).
 | Chord library keyboard | Chord sets from `CHORDS/*.XML` (Default, Jazz, Progressions in `contrib/sd_card/CHORDS`), control column with lead mode and octave pads, split mode (degree chords + fourths grid), in-key roots, follows key changes. | — | `feature/jazz-chord-library`, `feature/chord-library-control-column`, `feature/chord-library-shared-table`, `feature/chord-library-split` |
 | Battery level | Fixes 100% while plugged in, recalibrates the scale, ignores the boot transient. | — | `claude/battery-level-global-settings-w1nrjl` |
 | Unarmed clip brightness | Grid view brightness for unarmed clips: Dim / Medium / Bright. | Grid Unarmed Clip Brightness | `fix/grid-unarmed-clip-brightness` |
+| Grid green-mode stuck press | With Select in green mode off, tapping an empty pad in green mode no longer leaves song view stuck as if a clip were still held (blinking type button, BACK dead, next tap opens the clip). | — | `fix/grid-green-launch-stuck-press` |
 | Loop command overdubs | Falls back to an armed audio clip when the loop command has no source clip. | — | `fix/loop-command-source-fallback` |
 
 ## Sysex protocol (smSysex) and USB MIDI
