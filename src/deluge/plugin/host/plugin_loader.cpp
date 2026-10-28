@@ -45,9 +45,10 @@ uint32_t numRecords = 0;
 
 // Descriptors bound from blobs. The host is handed a pointer into these, so they have to outlive the scan - and
 // they are the only mutable copy of a descriptor in the firmware; everything else is constexpr.
-DelugeFxPlugin loadedFx[kNumBuiltinFxPlugins];
-DelugeFxParamInfo loadedFxParams[kNumBuiltinFxPlugins][kMaxParamsPerFxPlugin];
-bool fxSlotLoaded[kNumBuiltinFxPlugins];
+// std::array rather than C arrays so an empty FX registry (zero slots) still compiles.
+std::array<DelugeFxPlugin, kNumBuiltinFxPlugins> loadedFx;
+std::array<std::array<DelugeFxParamInfo, kMaxParamsPerFxPlugin>, kNumBuiltinFxPlugins> loadedFxParams;
+std::array<bool, kNumBuiltinFxPlugins> fxSlotLoaded;
 DelugeSourcePlugin loadedSource;
 DelugeSourceModelInfo loadedSourceModels[kMaxLoadedSourceModels];
 bool sourceLoaded;
@@ -217,7 +218,7 @@ PluginLoadStatus bindAndInstall(const uint8_t* file, PluginLoadRecord& record) {
 		}
 		DelugeFxPlugin& plugin = loadedFx[index];
 		record.stage = PluginLoadStage::binding;
-		if (deluge_plugin_blob_bind_fx(file, image, &plugin, loadedFxParams[index], kMaxParamsPerFxPlugin)
+		if (deluge_plugin_blob_bind_fx(file, image, &plugin, loadedFxParams[index].data(), kMaxParamsPerFxPlugin)
 		    != DELUGE_PLUGIN_BLOB_OK) {
 			return PluginLoadStatus::incompatible;
 		}

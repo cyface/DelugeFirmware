@@ -16,7 +16,7 @@
 """Build a plugin kernel into a .dlp blob for the SD card (tier 2, fork issue #41).
 
     src/deluge/plugin/tools/pack_dlp.py --all --out build/plugins
-    src/deluge/plugin/tools/pack_dlp.py Tape --out /Volumes/DELUGE/PLUGINS/tape.dlp
+    src/deluge/plugin/tools/pack_dlp.py Drum --out /Volumes/DELUGE/PLUGINS/drum.dlp
 
 What it does, per plugin:
 

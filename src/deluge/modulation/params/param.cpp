@@ -534,8 +534,8 @@ constexpr char const* paramNameForFileConst(Kind const kind, ParamType const par
 		case UNPATCHED_BITCRUSHING:
 			return "bitcrushAmount";
 
-		case UNPATCHED_FX_PLUGIN_PARAM_FIRST: // the whole bank is answered above
-			break;
+			// No case for UNPATCHED_FX_PLUGIN_PARAM_FIRST: the bank is answered above, and with no FX plugins
+			// registered it is empty and shares its value with UNPATCHED_MOD_FX_OFFSET.
 
 		case UNPATCHED_MOD_FX_OFFSET:
 			return "modFXOffset";

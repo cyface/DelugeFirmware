@@ -262,7 +262,6 @@ like a basic oscillator.
 models, 96 000 random blocks, 0 mismatches). 8.9 KB of position-independent Thumb-2 plus 36 bytes
 of `.rodata` as a blob.
 
-`fx/tape_saturation.c` is the first kernel: the Tape saturation effect, moved here unchanged from
-`ModControllableAudio` and verified bit-exact against the inline original (native harness, 3960
-random blocks over all three drive bases, knob boundaries, block sizes 1/64/128, on/off toggling).
-1.4 KB of position-independent Thumb-2 as a blob.
+No insert FX is registered on `local-fixes`. The reference FX kernel, tape saturation
+(`fx/tape_saturation.c`), lives on `feature/plugin-architecture`; the FX plumbing here (param bank,
+menus, automation, loader slots) is dormant with `params::kNumFxPluginParams = 0` until one is added.

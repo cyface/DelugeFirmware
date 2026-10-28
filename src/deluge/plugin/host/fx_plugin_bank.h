@@ -30,7 +30,7 @@ namespace deluge::plugin {
 
 /// Built-in insert-FX plugins in signal-chain order. Adding one: write the kernel, describe it in builtin_fx.h,
 /// append it here, and bump params::kNumFxPluginParams by its param count (the static_assert below checks).
-inline constexpr std::array<const DelugeFxPlugin*, 1> kBuiltinFxPlugins = {&builtin::kTapeSaturation};
+inline constexpr std::array<const DelugeFxPlugin*, 0> kBuiltinFxPlugins = {};
 inline constexpr uint32_t kNumBuiltinFxPlugins = kBuiltinFxPlugins.size();
 
 /// Largest per-instance state block a slot can hold, and the most params one plugin may declare.

@@ -29,6 +29,7 @@
  */
 #include "plugin/host/builtin_fx.h"
 #include "plugin/host/builtin_sources.h"
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -59,14 +60,8 @@ struct SourceRecord {
 	const char* renderSymbol;
 };
 
-static_assert(builtin::kTapeSaturation.reset == tape_saturation_reset);
-static_assert(builtin::kTapeSaturation.isActive == tape_saturation_is_active);
-static_assert(builtin::kTapeSaturation.render == tape_saturation_render);
-
-constexpr FxRecord kFxRecords[] = {
-    {&builtin::kTapeSaturation, "src/deluge/plugin/fx/tape_saturation.c", "src/deluge/plugin/fx/tape_saturation.h",
-     "sizeof(TapeSaturationState)", "tape_saturation_reset", "tape_saturation_is_active", "tape_saturation_render"},
-};
+// No built-in insert FX on this branch (tape saturation lives on feature/plugin-architecture).
+constexpr std::array<FxRecord, 0> kFxRecords{};
 
 static_assert(builtin::kPlaitsDrums.init == plaits_drums_init);
 static_assert(builtin::kPlaitsDrums.trigger == plaits_drums_trigger);
