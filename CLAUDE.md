@@ -26,6 +26,9 @@ Tim's fork of the Synthstrom Audible Deluge firmware (C++, ARM bare-metal).
   It is merge-based — never rebase it. Merging a new fix branch often conflicts in
   shared registration points (settings enums, menu arrays, l10n files); resolve by
   keeping both sides.
+- `LOCAL-FIXES.md` (also local-fixes only) summarises what this branch adds over
+  upstream `main`. Update it in the same change whenever a branch is merged in, a
+  feature is removed, or an upstream sync absorbs a local fix.
 
 ## Building
 
