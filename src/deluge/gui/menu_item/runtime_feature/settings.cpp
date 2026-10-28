@@ -78,7 +78,7 @@ SettingToggle menuSysexPresetReload(RuntimeFeatureSettingType::SysexPresetReload
 Setting menuGridUnarmedClipBrightness(RuntimeFeatureSettingType::GridUnarmedClipBrightness);
 SettingToggle menuDrumVelocityLayers(RuntimeFeatureSettingType::DrumVelocityLayers);
 SettingToggle menuSysexLiveEdit(RuntimeFeatureSettingType::SysexLiveEdit);
-SettingToggle menuShortcutOverlay(RuntimeFeatureSettingType::ShortcutOverlay);
+Setting menuShortcutOverlay(RuntimeFeatureSettingType::ShortcutOverlay);
 
 std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettings> subMenuEntries{
     &menuDrumRandomizer,

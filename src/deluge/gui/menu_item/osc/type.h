@@ -39,7 +39,7 @@ public:
 	    : Selection(name), FormattedTitle(title_format_str, source_id + 1), sourceId_{source_id} {};
 	void beginSession(MenuItem* navigatedBackwardFrom) override { Selection::beginSession(navigatedBackwardFrom); }
 
-	bool mayUseDx() const { return !soundEditor.editingKit() && sourceId_ == 0; }
+	bool mayUseDx() const { return sourceId_ == 0; }
 
 	/// Drum models are hidden until the community feature is enabled, but a preset that already uses one
 	/// must still be able to display (and keep) its type.

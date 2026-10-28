@@ -329,7 +329,7 @@ bool readButtonsAndPads() {
 			Buttons::noPressesHappening(sdRoutineLock);
 		}
 		else if (util::to_underlying(value) == oledWaitingForMessage && deluge::hid::display::have_oled_screen) {
-			uiTimerManager.setTimer(TimerName::OLED_LOW_LEVEL, 3);
+			oledAcknowledgementReceived(util::to_underlying(value));
 		}
 	}
 
@@ -606,7 +606,17 @@ void registerTasks() {
 	addRepeatingTask([]() { playbackHandler.routine(); }, p++, 0.0005, 0.001, 0.002, "playback routine", RESOURCE_NONE);
 	midiEngine.routine_task_id = addRepeatingTask([]() { playbackHandler.midiRoutine(); }, p++, 0.0005, 0.001, 0.002,
 	                                              "midi routine", RESOURCE_SD | RESOURCE_USB);
-	addRepeatingTask([]() { audioFileManager.loadAnyEnqueuedClusters(128, false); }, p++, 0.0001, 0.0001, 0.0002,
+	if (hid::display::have_oled_screen) {
+		// This releases the shared SPI bus for CV, so service requests, acknowledgements
+		// and settling deadlines ahead of UI work. UART writes stay in task context.
+		addRepeatingTask(
+		    []() {
+			    oledRoutine();
+			    PIC::flush();
+		    },
+		    p++, 0.0005, 0.0005, 0.001, "OLED/CV handshake", RESOURCE_NONE);
+	}
+	addRepeatingTask([]() { audioFileManager.loadAnyEnqueuedClusters(false); }, p++, 0.0001, 0.0001, 0.0002,
 	                 "load clusters", RESOURCE_NONE);
 	// handles sd card recorders
 	// named "slow" but isn't actually, it handles audio recording setup
@@ -638,9 +648,6 @@ void registerTasks() {
 	// 31-39: Idle priority (40 for dyn tasks)
 	p = 31;
 	addRepeatingTask(&(PIC::flush), p++, 0.001, 0.001, 0.02, "PIC flush", RESOURCE_NONE);
-	if (hid::display::have_oled_screen) {
-		addRepeatingTask(&(oledRoutine), p++, 0.01, 0.01, 0.02, "oled routine", RESOURCE_NONE);
-	}
 	// needs to be called very frequently,
 	// handles animations and checks on the timers for any infrequent actions
 	// long term this should probably be made into an idle task
@@ -974,6 +981,12 @@ extern "C" int32_t deluge_main(void) {
 	uiTimerManager.setTimer(TimerName::GRAPHICS_ROUTINE, 50);
 
 	D_PRINTLN("going into main loop");
+	// Long after resetprg.c has used the BSC to set up SDRAM, which shares this mapping
+	L2CacheMapRegistersAsDevice();
+	// Stealables are mostly streamed sample data, which L2 gains little from, and DMA writes Clusters there, which
+	// would otherwise need slow L2 maintenance. Before unlocking, so L2 isn't holding any of it.
+	L2CacheMapRangeInnerOnly(GeneralMemoryAllocator::get().stealableSectionsStart,
+	                         GeneralMemoryAllocator::get().stealableSectionsEnd);
 	L2CacheUnlockData();
 	sdRoutineLock = false; // Allow SD routine to start happening
 

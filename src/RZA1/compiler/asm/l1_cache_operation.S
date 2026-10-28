@@ -33,11 +33,9 @@
 @ It also enables branch prediction
 @ This code must be run from a privileged mode
 @==================================================================
-@ Was '.section L1_CACHE_OPERATION, "x"' - a custom section the e2studio-era linker script mapped
-@ explicitly, but ours doesn't, and the missing "a" flag made it non-allocatable: the linker
-@ placed it at VMA 0 outside every LOAD segment, so calling any function here hard-faulted.
-@ Standard .text puts it in internal RAM with everything else.
-    .section    .text.l1_cache_operation, "ax", %progbits
+@ In .text like the other cache code. This was a section of its own flagged "x" but not "a", which the linker script
+@ did not place - so it was never loaded, and calling anything here jumped to address 0
+    .text
     .arm
 
     .global  L1_I_CacheFlushAllAsm

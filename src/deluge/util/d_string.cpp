@@ -137,10 +137,11 @@ void String::set(String const* otherString) {
 		D_PRINTLN("setting string to itself");
 		return;
 	}
-	// if the other string has memory and it's not in the non audio region. Sharing it would have beenCloned() write a
-	// reason count into memory we don't own
+	// if the other string has memory and it's not in the external regions, which allocExternal() allocates it from.
+	// Sharing it would have beenCloned() write a reason count into memory we don't own
 	if (sm != nullptr) {
-		if (!(EXTERNAL_MEMORY_END - RESERVED_EXTERNAL_ALLOCATOR < (uint32_t)sm && (uint32_t)sm < EXTERNAL_MEMORY_END)) {
+		int32_t region = GeneralMemoryAllocator::get().getRegion(sm);
+		if (region != MEMORY_REGION_EXTERNAL && region != MEMORY_REGION_EXTERNAL_SMALL) {
 			FREEZE_WITH_ERROR("S001");
 			return;
 		}
@@ -238,10 +239,10 @@ Error String::concatenateAtPos(char const* newChars, int32_t pos, int32_t newCha
 	int32_t extraBytesNeeded;
 	bool deallocateAfter = true;
 
-	// If additional reasons, we definitely have to allocate afresh
+	// If additional reasons, we definitely have to allocate afresh. Only drop our reason on the shared memory once the
+	// new memory exists - if allocation fails we're still pointing at it.
 	if (oldNumReasons > 1) {
 		deallocateAfter = false;
-		setNumReasons(oldNumReasons - 1);
 		goto allocateNewMemory;
 	}
 
@@ -281,6 +282,9 @@ allocateNewMemory:
 
 			if (deallocateAfter) {
 				delugeDealloc(stringMemory - 4);
+			}
+			else {
+				setNumReasons(oldNumReasons - 1); // Reduce reasons on old memory
 			}
 			stringMemory = newStringMemory;
 			setNumReasons(1);
