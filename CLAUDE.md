@@ -57,7 +57,9 @@ Pre-commit hooks run clang-format and may modify files, failing the first
 
 ## Testing without hardware
 
-DelugEmu (QEMU-based emulator) can boot a built `deluge.bin`; panel interaction and
-screendumps work over QMP, and sysex/file transfer over UDP MIDI. See the notes in
-Claude's project memory (`delugemu-launch`, `delugemu-testing`) for paths and
-invocation details.
+DelugEmu (QEMU-based emulator, tracked from SynthstromAudible/delugemu nightlies) can
+boot a built `deluge.bin`; panel interaction and screendumps work over QMP, and
+sysex/file transfer over UDP MIDI. `--usb-midi` defaults to the Deluge as a USB
+peripheral (use a `tcp:` chardev there); add `--usb-host` for the old attached-device
+mode, which also works over `udp:`. See the notes in Claude's project memory
+(`delugemu-launch`, `delugemu-testing`) for paths and invocation details.
